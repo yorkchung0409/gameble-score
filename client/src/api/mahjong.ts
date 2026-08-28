@@ -1,0 +1,93 @@
+import { apiClient } from './client';
+import type {
+  CreateUserRequest,
+  CreateUserResponse,
+  GetUserByDeviceResponse,
+  CreateMahjongRoomRequest,
+  CreateMahjongRoomResponse,
+  MahjongRoomDetailResponse,
+  SitDownRequest,
+  LeaveSeatRequest,
+  CreateTransactionRequest,
+} from '@shared/api.interface';
+
+const BASE = '/api/mahjong';
+const USERS_BASE = `${BASE}/users`;
+const ROOMS_BASE = `${BASE}/rooms`;
+
+export async function createUser(
+  data: CreateUserRequest,
+): Promise<CreateUserResponse> {
+  const res = await apiClient.post<CreateUserResponse>(USERS_BASE, data);
+  return res.data;
+}
+
+export async function getUserByDevice(
+  deviceId: string,
+): Promise<GetUserByDeviceResponse> {
+  const res = await apiClient.get<GetUserByDeviceResponse>(
+    `${USERS_BASE}/by-device/${deviceId}`,
+  );
+  return res.data;
+}
+
+export async function createRoom(
+  data: CreateMahjongRoomRequest,
+): Promise<CreateMahjongRoomResponse> {
+  const res = await apiClient.post<CreateMahjongRoomResponse>(
+    ROOMS_BASE,
+    data,
+  );
+  return res.data;
+}
+
+export async function getRoom(
+  roomCode: string,
+): Promise<MahjongRoomDetailResponse> {
+  const res = await apiClient.get<MahjongRoomDetailResponse>(
+    `${ROOMS_BASE}/${roomCode}`,
+  );
+  return res.data;
+}
+
+export async function sitDown(
+  roomCode: string,
+  data: SitDownRequest,
+): Promise<MahjongRoomDetailResponse> {
+  const res = await apiClient.post<MahjongRoomDetailResponse>(
+    `${ROOMS_BASE}/${roomCode}/seats/sit`,
+    data,
+  );
+  return res.data;
+}
+
+export async function leaveSeat(
+  roomCode: string,
+  data: LeaveSeatRequest,
+): Promise<MahjongRoomDetailResponse> {
+  const res = await apiClient.post<MahjongRoomDetailResponse>(
+    `${ROOMS_BASE}/${roomCode}/seats/leave`,
+    data,
+  );
+  return res.data;
+}
+
+export async function createTransaction(
+  roomCode: string,
+  data: CreateTransactionRequest,
+): Promise<MahjongRoomDetailResponse> {
+  const res = await apiClient.post<MahjongRoomDetailResponse>(
+    `${ROOMS_BASE}/${roomCode}/transactions`,
+    data,
+  );
+  return res.data;
+}
+
+export async function deleteTransaction(
+  roomCode: string,
+  transactionId: string,
+): Promise<void> {
+  await apiClient.delete(
+    `${ROOMS_BASE}/${roomCode}/transactions/${transactionId}`,
+  );
+}

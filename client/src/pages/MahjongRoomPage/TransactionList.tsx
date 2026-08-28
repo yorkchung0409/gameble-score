@@ -1,0 +1,113 @@
+import { Trash2 } from 'lucide-react';
+import type { MahjongTransaction } from '@shared/api.interface';
+
+interface TransactionListProps {
+  transactions: MahjongTransaction[];
+  onDelete: (id: string) => void;
+}
+
+const formatDate = (dateStr: string): string => {
+  const d = new Date(dateStr);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${mm}-${dd} ${hh}:${mi}`;
+};
+
+const TransactionList = ({
+  transactions,
+  onDelete,
+}: TransactionListProps) => {
+  if (transactions.length === 0) {
+    return (
+      <div
+        className="rounded-xl p-10 text-center"
+        style={{
+          backgroundColor: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(212,175,55,0.3)',
+          color: '#b8b8a8',
+        }}
+      >
+        还没有转账记录，点击手动转账开始记账
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{
+        backgroundColor: 'rgba(255,255,255,0.06)',
+        border: '1px solid rgba(212,175,55,0.3)',
+      }}
+    >
+      <div
+        className="px-4 py-3 text-sm font-semibold"
+        style={{
+          color: '#e8c96a',
+          borderBottom: '1px solid rgba(212,175,55,0.15)',
+        }}
+      >
+        转账记录
+      </div>
+      <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        {transactions.map((tx: MahjongTransaction) => (
+          <div
+            key={tx.id}
+            className="flex items-center justify-between gap-3 px-4 py-3"
+          >
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-xs mb-1"
+                style={{ color: '#b8b8a8' }}
+              >
+                {formatDate(tx.createdAt)}
+              </div>
+              <div
+                className="text-sm font-medium truncate"
+                style={{ color: '#f0f0e8' }}
+              >
+                <span style={{ color: '#ef4444' }}>{tx.payerName}</span>
+                <span style={{ color: '#b8b8a8' }} className="mx-2">
+                  →
+                </span>
+                <span style={{ color: '#22c55e' }}>
+                  {tx.payeeType === 'tea_fee'
+                    ? '茶水费'
+                    : tx.payeeName}
+                </span>
+              </div>
+              {tx.remark && (
+                <div
+                  className="text-xs mt-1"
+                  style={{ color: '#b8b8a8' }}
+                >
+                  备注：{tx.remark}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span
+                className="font-mono font-semibold"
+                style={{ color: '#e8c96a' }}
+              >
+                ¥{Number(tx.amount).toFixed(2)}
+              </span>
+              <button
+                className="p-1.5 rounded-md transition-colors hover:bg-white/10"
+                style={{ color: '#b8b8a8' }}
+                onClick={() => onDelete(tx.id)}
+                title="删除"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default TransactionList;
