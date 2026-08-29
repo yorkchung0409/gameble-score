@@ -25,7 +25,8 @@ async function bootstrap() {
 
   const logger = new Logger('Bootstrap');
   const host = process.env.SERVER_HOST || '0.0.0.0';
-  const port = Number(process.env.SERVER_PORT || '3000');
+  // Railway / Vercel 等 PaaS 通常注入 PORT，此处兼容
+  const port = Number(process.env.SERVER_PORT || process.env.PORT || '3000');
 
   // 注册视图引擎，渲染 client 目录下的 html 文件
   app.setBaseViewsDir(join(process.cwd(), 'dist/client'));
