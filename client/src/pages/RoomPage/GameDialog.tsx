@@ -109,8 +109,12 @@ const GameDialog = ({
         toast.error(`第${i + 1}行请选择人员`);
         return;
       }
-      if (r.buyIn === '' || r.balance === '') {
-        toast.error(`第${i + 1}行买入和结余不能为空`);
+      if (r.buyIn !== '' && Number(r.buyIn) < 0) {
+        toast.error(`第${i + 1}行买入不能为负数`);
+        return;
+      }
+      if (r.balance !== '' && Number(r.balance) < 0) {
+        toast.error(`第${i + 1}行结余不能为负数`);
         return;
       }
     }
@@ -120,8 +124,8 @@ const GameDialog = ({
         gameDate: dayjs(gameDate).format('YYYY-MM-DD'),
         players: rows.map((r) => ({
           playerId: r.playerId,
-          buyIn: Number(r.buyIn),
-          balance: Number(r.balance),
+          buyIn: r.buyIn === '' ? 0 : Number(r.buyIn),
+          balance: r.balance === '' ? 0 : Number(r.balance),
         })),
       });
       onOpenChange(false);
@@ -186,8 +190,8 @@ const GameDialog = ({
           <div className="col-span-4">人员</div>
           <div className="col-span-2 text-right">买入</div>
           <div className="col-span-2 text-right">结余</div>
-          <div className="col-span-3 text-right">净盈亏</div>
-          <div className="col-span-1"></div>
+          <div className="col-span-2 text-right">净盈亏</div>
+          <div className="col-span-2 text-center">操作</div>
         </div>
 
         {/* Player rows */}
@@ -267,14 +271,14 @@ const GameDialog = ({
                   />
                 </div>
                 <div
-                  className="col-span-3 text-right font-mono font-semibold text-sm"
+                  className="col-span-2 text-right font-mono font-semibold text-sm pr-1"
                   style={{ color: netColor }}
                 >
                   {net === null
                     ? '-'
                     : `${net >= 0 ? '+' : ''}${net.toFixed(2)}`}
                 </div>
-                <div className="col-span-1 flex justify-end">
+                <div className="col-span-2 flex justify-center">
                   <Button
                     variant="ghost"
                     size="icon"

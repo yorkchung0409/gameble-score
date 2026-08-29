@@ -273,10 +273,19 @@ export class MahjongService {
     }));
 
     // 计算 stats
-    // 每个座位用户的余额 = 收款总额 - 付款总额
+    // 收集所有有转账记录的用户（付款方 + 用户类型收款方），无论当前是否入座
+    const txUserIdsSet = new Set<string>();
+    for (const tx of txRows) {
+      txUserIdsSet.add(tx.payerId);
+      if (tx.payeeType === 'user' && tx.payeeId) {
+        txUserIdsSet.add(tx.payeeId);
+      }
+    }
+
+    // 每个有转账记录的用户余额 = 收款总额 - 付款总额
     const balanceMap = new Map<string, number>();
-    for (const s of seatRows) {
-      balanceMap.set(s.userId, 0);
+    for (const uid of txUserIdsSet) {
+      balanceMap.set(uid, 0);
     }
 
     let teaFeeTotalNum = 0;
@@ -284,7 +293,7 @@ export class MahjongService {
 
     for (const tx of txRows) {
       const amt = Number(tx.amount);
-      totalTurnoverNum += amt;
+      totalTurnoverNum += Math.abs(amt);
 
       if (tx.payeeType === 'tea_fee') {
         teaFeeTotalNum += amt;
@@ -299,13 +308,16 @@ export class MahjongService {
       }
     }
 
-    const balances = seatRows.map((s) => ({
-      userId: s.userId,
-      userName: userNameMap.get(s.userId) ?? '',
-      balance: String(balanceMap.get(s.userId) ?? 0),
-    }));
+    // 所有有转账记录的玩家都展示，按余额绝对值降序
+    const balances = Array.from(txUserIdsSet)
+      .map((uid) => ({
+        userId: uid,
+        userName: userNameMap.get(uid) ?? '',
+        balance: String(balanceMap.get(uid) ?? 0),
+      }))
+      .sort((a, b) => Math.abs(Number(b.balance)) - Math.abs(Number(a.balance)));
 
-    // balanceCheck: 所有座位用户余额之和 + 茶费 = 0 则 balanced
+    // balanceCheck: 所有用户余额之和 + 茶费 = 0 则 balanced
     const sumBalances = balances.reduce(
       (acc: number, b: { balance: string }) => acc + Number(b.balance),
       0,
