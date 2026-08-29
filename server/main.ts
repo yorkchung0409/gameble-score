@@ -20,8 +20,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // 全局前缀
-  app.setGlobalPrefix('api', { exclude: ['/', '*'] });
+  // 注意：各业务 controller 已自带 'api/xxx' 前缀，这里不能再设置全局前缀，避免出现 /api/api/xxx 双重前缀
 
   const logger = new Logger('Bootstrap');
   const host = process.env.SERVER_HOST || '0.0.0.0';
