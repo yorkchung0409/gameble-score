@@ -22,6 +22,7 @@ export const rooms = pgTable(
     roomName: varchar('room_name', { length: 200 }).notNull().default('牌局记账'),
     gameType: varchar('game_type', { length: 20 }).notNull().default('texas'),
     createdAt: timestamp('created_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp('updated_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [uniqueIndex('rooms_room_code_key').on(table.roomCode)],
 );
@@ -152,6 +153,7 @@ export const mahjongTransactions = pgTable(
     payeeId: uuid('payee_id'),
     amount: numeric('amount').notNull().default('0'),
     remark: varchar('remark', { length: 500 }),
+    reversalOf: uuid('reversal_of'),
     createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [

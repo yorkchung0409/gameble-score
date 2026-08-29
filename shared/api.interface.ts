@@ -118,6 +118,7 @@ export interface MahjongTransaction {
   payeeName: string | null;
   amount: string;
   remark: string | null;
+  reversalOf: string | null;
   createdAt: string;
 }
 
@@ -167,6 +168,10 @@ export interface CreateTransactionRequest {
   payeeId?: string;
   amount: number;
   remark?: string;
+  operatorUserId: string;
+}
+
+export interface ReverseTransactionRequest {
   operatorUserId: string;
 }
 

@@ -10,15 +10,12 @@ import {
   Loader2Icon,
   XIcon,
 } from 'lucide-react';
-import { useTheme } from 'next-themes';
 import { Toaster as Sonner, type ToasterProps } from 'sonner';
 
 function Toaster({ className, style, icons, ...props }: ToasterProps) {
-  const { theme = 'system' } = useTheme();
-
   return (
     <Sonner
-      theme={theme as ToasterProps['theme']}
+      theme="light"
       className={cn('toaster group', className)}
       position="top-center"
       icons={{

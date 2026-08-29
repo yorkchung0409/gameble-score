@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  root: path.resolve(__dirname, 'client'),
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'client/src'),

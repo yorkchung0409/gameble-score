@@ -1,9 +1,10 @@
-import { Trash2 } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import type { MahjongTransaction } from '@shared/api.interface';
 
 interface TransactionListProps {
   transactions: MahjongTransaction[];
-  onDelete: (id: string) => void;
+  currentUserId: string;
+  onReverse: (tx: MahjongTransaction) => void;
 }
 
 const formatDate = (dateStr: string): string => {
@@ -17,7 +18,8 @@ const formatDate = (dateStr: string): string => {
 
 const TransactionList = ({
   transactions,
-  onDelete,
+  currentUserId,
+  onReverse,
 }: TransactionListProps) => {
   if (transactions.length === 0) {
     return (
@@ -43,68 +45,92 @@ const TransactionList = ({
       }}
     >
       <div
-        className="px-4 py-3 text-sm font-semibold"
+        className="px-4 py-3 text-sm font-semibold flex items-center justify-between"
         style={{
           color: '#e8c96a',
           borderBottom: '1px solid rgba(212,175,55,0.15)',
         }}
       >
-        转账记录
+        <span>转账记录</span>
+        <span className="text-xs font-normal" style={{ color: '#8a8a7a' }}>
+          仅能冲正自己付款的记录
+        </span>
       </div>
       <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-        {transactions.map((tx: MahjongTransaction) => (
-          <div
-            key={tx.id}
-            className="flex items-center justify-between gap-3 px-4 py-3"
-          >
-            <div className="flex-1 min-w-0">
-              <div
-                className="text-xs mb-1"
-                style={{ color: '#b8b8a8' }}
-              >
-                {formatDate(tx.createdAt)}
-              </div>
-              <div
-                className="text-sm font-medium truncate"
-                style={{ color: '#f0f0e8' }}
-              >
-                <span style={{ color: '#ef4444' }}>{tx.payerName}</span>
-                <span style={{ color: '#b8b8a8' }} className="mx-2">
-                  →
-                </span>
-                <span style={{ color: '#22c55e' }}>
-                  {tx.payeeType === 'tea_fee'
-                    ? '茶水费'
-                    : tx.payeeName}
-                </span>
-              </div>
-              {tx.remark && (
+        {transactions.map((tx: MahjongTransaction) => {
+          const isReversal = !!tx.reversalOf;
+          const canReverse = tx.payerId === currentUserId;
+          const amountNum = Number(tx.amount);
+          return (
+            <div
+              key={tx.id}
+              className="flex items-center justify-between gap-3 px-4 py-3"
+              style={isReversal ? { opacity: 0.75 } : undefined}
+            >
+              <div className="flex-1 min-w-0">
                 <div
-                  className="text-xs mt-1"
+                  className="text-xs mb-1 flex items-center gap-1.5"
                   style={{ color: '#b8b8a8' }}
                 >
-                  备注：{tx.remark}
+                  {formatDate(tx.createdAt)}
+                  {isReversal && (
+                    <span
+                      className="text-[10px] px-1.5 py-px rounded font-medium"
+                      style={{
+                        color: '#07301a',
+                        backgroundColor: '#e8c96a',
+                      }}
+                    >
+                      冲正
+                    </span>
+                  )}
                 </div>
-              )}
+                <div
+                  className="text-sm font-medium truncate"
+                  style={{ color: '#f0f0e8' }}
+                >
+                  <span style={{ color: '#ef4444' }}>{tx.payerName}</span>
+                  <span style={{ color: '#b8b8a8' }} className="mx-2">
+                    →
+                  </span>
+                  <span style={{ color: '#22c55e' }}>
+                    {tx.payeeType === 'tea_fee'
+                      ? '茶水费'
+                      : tx.payeeName}
+                  </span>
+                </div>
+                {tx.remark && (
+                  <div
+                    className="text-xs mt-1"
+                    style={{ color: '#b8b8a8' }}
+                  >
+                    备注：{tx.remark}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span
+                  className="font-mono font-semibold"
+                  style={{
+                    color: isReversal ? '#b8b8a8' : '#e8c96a',
+                  }}
+                >
+                  ¥{amountNum.toFixed(2)}
+                </span>
+                {canReverse && (
+                  <button
+                    className="p-1.5 rounded-md transition-colors hover:bg-white/10"
+                    style={{ color: '#b8b8a8' }}
+                    onClick={() => onReverse(tx)}
+                    title="冲正（撤销这笔转账）"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <span
-                className="font-mono font-semibold"
-                style={{ color: '#e8c96a' }}
-              >
-                ¥{Number(tx.amount).toFixed(2)}
-              </span>
-              <button
-                className="p-1.5 rounded-md transition-colors hover:bg-white/10"
-                style={{ color: '#b8b8a8' }}
-                onClick={() => onDelete(tx.id)}
-                title="删除"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

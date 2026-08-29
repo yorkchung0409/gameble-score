@@ -10,11 +10,13 @@ import { Toaster } from '@client/src/components/ui/sonner';
 
 const CLIENT_BASE_PATH = process.env.CLIENT_BASE_PATH || '/';
 
-const ErrorFallback = ({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) => {
+const ErrorFallback = ({ error, resetErrorBoundary }: { error: unknown; resetErrorBoundary: () => void }) => {
   return (
     <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'sans-serif' }}>
       <h2>页面出错了</h2>
-      <pre style={{ color: '#666', marginTop: '16px', whiteSpace: 'pre-wrap' }}>{error.message}</pre>
+      <pre style={{ color: '#666', marginTop: '16px', whiteSpace: 'pre-wrap' }}>
+        {error instanceof Error ? error.message : String(error)}
+      </pre>
       <button
         onClick={resetErrorBoundary}
         style={{ marginTop: '20px', padding: '8px 20px', cursor: 'pointer' }}

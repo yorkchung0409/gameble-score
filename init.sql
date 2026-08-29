@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   room_code VARCHAR(50) NOT NULL UNIQUE,
   room_name VARCHAR(200) NOT NULL DEFAULT '牌局记账',
   game_type VARCHAR(20) NOT NULL DEFAULT 'texas',
-  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS players (
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS mahjong_transactions (
   payee_id UUID REFERENCES users(id) ON DELETE CASCADE,
   amount NUMERIC NOT NULL DEFAULT '0',
   remark VARCHAR(500),
+  reversal_of UUID,
   created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_mahjong_transactions_room_id ON mahjong_transactions(room_id);

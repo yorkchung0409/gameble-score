@@ -13,6 +13,7 @@ import TransactionList from './TransactionList';
 import type {
   MahjongRoomDetailResponse,
   MahjongSeat,
+  MahjongTransaction,
   CreateTransactionRequest,
 } from '@shared/api.interface';
 
@@ -105,14 +106,23 @@ const MahjongRoomPage = () => {
     }
   };
 
-  const handleDeleteTransaction = async (transactionId: string) => {
-    if (!roomCode) return;
+  const handleReverseTransaction = async (tx: MahjongTransaction) => {
+    if (!roomCode || !currentUser) return;
+
+    const payeeLabel = tx.payeeType === 'tea_fee' ? '茶水费' : tx.payeeName ?? '';
+    const ok = window.confirm(
+      `确定冲正这笔转账吗？\n\n${tx.payerName} → ${payeeLabel}  ¥${Number(tx.amount).toFixed(2)}\n\n冲正会新增一笔反向记录，原记录保留，账目自动还原。`,
+    );
+    if (!ok) return;
+
     try {
-      await mahjongApi.deleteTransaction(roomCode, transactionId);
-      toast.success('已删除转账记录');
+      await mahjongApi.reverseTransaction(roomCode, tx.id, {
+        operatorUserId: currentUser.id,
+      });
+      toast.success('已冲正该笔转账');
       fetchRoom(true);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : '删除失败');
+      toast.error(err instanceof Error ? err.message : '冲正失败');
     }
   };
 
@@ -274,7 +284,8 @@ const MahjongRoomPage = () => {
 
         <TransactionList
           transactions={data.transactions}
-          onDelete={handleDeleteTransaction}
+          currentUserId={currentUserId}
+          onReverse={handleReverseTransaction}
         />
       </div>
     </div>

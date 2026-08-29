@@ -2,11 +2,8 @@ import {
   Controller,
   Post,
   Get,
-  Delete,
   Body,
   Param,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
 import { MahjongService } from './mahjong.service';
 import type {
@@ -19,6 +16,7 @@ import type {
   SitDownRequest,
   LeaveSeatRequest,
   CreateTransactionRequest,
+  ReverseTransactionRequest,
 } from '@shared/api.interface';
 
 @Controller('api/mahjong')
@@ -83,12 +81,16 @@ export class MahjongController {
     return this.mahjongService.createTransaction(roomCode, dto);
   }
 
-  @Delete('rooms/:roomCode/transactions/:transactionId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteTransaction(
+  @Post('rooms/:roomCode/transactions/:transactionId/reverse')
+  async reverseTransaction(
     @Param('roomCode') roomCode: string,
     @Param('transactionId') transactionId: string,
-  ): Promise<void> {
-    await this.mahjongService.deleteTransaction(roomCode, transactionId);
+    @Body() dto: ReverseTransactionRequest,
+  ): Promise<MahjongRoomDetailResponse> {
+    return this.mahjongService.reverseTransaction(
+      roomCode,
+      transactionId,
+      dto.operatorUserId,
+    );
   }
 }

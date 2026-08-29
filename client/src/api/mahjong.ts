@@ -9,6 +9,7 @@ import type {
   SitDownRequest,
   LeaveSeatRequest,
   CreateTransactionRequest,
+  ReverseTransactionRequest,
 } from '@shared/api.interface';
 
 const BASE = '/api/mahjong';
@@ -83,11 +84,14 @@ export async function createTransaction(
   return res.data;
 }
 
-export async function deleteTransaction(
+export async function reverseTransaction(
   roomCode: string,
   transactionId: string,
-): Promise<void> {
-  await apiClient.delete(
-    `${ROOMS_BASE}/${roomCode}/transactions/${transactionId}`,
+  data: ReverseTransactionRequest,
+): Promise<MahjongRoomDetailResponse> {
+  const res = await apiClient.post<MahjongRoomDetailResponse>(
+    `${ROOMS_BASE}/${roomCode}/transactions/${transactionId}/reverse`,
+    data,
   );
+  return res.data;
 }

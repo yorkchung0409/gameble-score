@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import {
@@ -267,6 +268,7 @@ export class MahjongService {
       payeeName: tx.payeeId ? userNameMap.get(tx.payeeId) ?? '' : null,
       amount: tx.amount,
       remark: tx.remark ?? null,
+      reversalOf: tx.reversalOf ?? null,
       createdAt: tx.createdAt.toISOString(),
     }));
 
@@ -483,10 +485,15 @@ export class MahjongService {
     return this.getRoomDetail(roomCode);
   }
 
-  async deleteTransaction(
+  /**
+   * 冲正一笔转账记录：不物理删除，而是新增一条反向记录，保证流水完整可追溯。
+   * 仅允许付款方本人冲正自己发起的转账。
+   */
+  async reverseTransaction(
     roomCode: string,
     transactionId: string,
-  ): Promise<void> {
+    operatorUserId: string,
+  ): Promise<MahjongRoomDetailResponse> {
     const roomRows = await this.db
       .select({ id: mahjongRooms.id })
       .from(mahjongRooms)
@@ -496,18 +503,65 @@ export class MahjongService {
     }
     const roomId = roomRows[0].id;
 
-    const deleted = await this.db
-      .delete(mahjongTransactions)
+    // 查询被冲正的原始记录
+    const originRows = await this.db
+      .select({
+        id: mahjongTransactions.id,
+        payerId: mahjongTransactions.payerId,
+        payeeType: mahjongTransactions.payeeType,
+        payeeId: mahjongTransactions.payeeId,
+        amount: mahjongTransactions.amount,
+        remark: mahjongTransactions.remark,
+      })
+      .from(mahjongTransactions)
       .where(
         and(
           eq(mahjongTransactions.id, transactionId),
           eq(mahjongTransactions.roomId, roomId),
         ),
-      )
-      .returning({ id: mahjongTransactions.id });
-
-    if (deleted.length === 0) {
+      );
+    if (originRows.length === 0) {
       throw new NotFoundException('转账记录不存在');
     }
+    const origin = originRows[0];
+
+    // 权限校验：只有初始付款方本人才能冲正
+    if (origin.payerId !== operatorUserId) {
+      throw new ForbiddenException('只能冲正自己付款的转账记录');
+    }
+
+    // 构造冲正记录
+    let reversePayerId = operatorUserId;
+    let reversePayeeType: string = origin.payeeType;
+    let reversePayeeId: string | null = null;
+    let reverseAmount: string;
+
+    if (origin.payeeType === 'tea_fee') {
+      // 茶水费是虚拟账户，无法换向，用负数金额表示从茶水费退回
+      reversePayerId = origin.payerId;
+      reversePayeeType = 'tea_fee';
+      reversePayeeId = null;
+      reverseAmount = String(-Number(origin.amount));
+    } else {
+      // 用户间转账：付款方与收款方互换
+      reversePayerId = origin.payeeId ?? origin.payerId;
+      reversePayeeType = 'user';
+      reversePayeeId = origin.payerId;
+      reverseAmount = origin.amount;
+    }
+
+    const originRemark = origin.remark ? `（${origin.remark}）` : '';
+
+    await this.db.insert(mahjongTransactions).values({
+      roomId,
+      payerId: reversePayerId,
+      payeeType: reversePayeeType,
+      payeeId: reversePayeeId,
+      amount: reverseAmount,
+      remark: `【冲正】${originRemark}`,
+      reversalOf: origin.id,
+    });
+
+    return this.getRoomDetail(roomCode);
   }
 }
