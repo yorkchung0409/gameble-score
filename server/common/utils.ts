@@ -2,6 +2,8 @@
  * 后端公共工具函数
  */
 
+import { BadRequestException } from '@nestjs/common';
+
 /** 生成 6 位随机房间码（A-Z + 0-9） */
 export function generateRoomCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -28,14 +30,14 @@ export function normalizeRoomCode(roomCode: string): string {
   return (roomCode || '').trim().toUpperCase();
 }
 
-/** 金额字段：仅允许最多两位小数的非负数字字符串，返回校验后的 number，非法抛错 */
+/** 金额字段：仅允许最多两位小数的非负数字字符串，返回校验后的 number，非法抛 400 */
 export function parseNonNegativeAmount(value: number | undefined, fieldName: string): number {
   const n = Number(value);
   if (!Number.isFinite(n)) {
-    throw new Error(`${fieldName}不是有效数字`);
+    throw new BadRequestException(`${fieldName}不是有效数字`);
   }
   if (n < 0) {
-    throw new Error(`${fieldName}不能为负数`);
+    throw new BadRequestException(`${fieldName}不能为负数`);
   }
   // 保留两位小数精度，避免浮点误差
   return Math.round(n * 100) / 100;
