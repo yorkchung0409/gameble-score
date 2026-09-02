@@ -8,9 +8,16 @@ interface RecentRoomsProps {
   deviceId: string;
   gameType: string;
   pathPrefix: string;
+  /** 无记录时显示的空态文案；不传则不显示任何内容 */
+  emptyText?: string;
 }
 
-const RecentRooms = ({ deviceId, gameType, pathPrefix }: RecentRoomsProps) => {
+const RecentRooms = ({
+  deviceId,
+  gameType,
+  pathPrefix,
+  emptyText,
+}: RecentRoomsProps) => {
   const navigate = useNavigate();
   const [visits, setVisits] = useState<RoomVisitRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -35,7 +42,23 @@ const RecentRooms = ({ deviceId, gameType, pathPrefix }: RecentRoomsProps) => {
     };
   }, [deviceId, gameType]);
 
-  if (loading || visits.length === 0) return null;
+  if (loading) return null;
+
+  if (visits.length === 0) {
+    if (!emptyText) return null;
+    return (
+      <div
+        className="rounded-xl p-6 text-center shadow-lg mb-4"
+        style={{
+          backgroundColor: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(212,175,55,0.3)',
+          color: '#b8b8a8',
+        }}
+      >
+        {emptyText}
+      </div>
+    );
+  }
 
   const formatTime = (isoStr: string): string => {
     const d = new Date(isoStr);
