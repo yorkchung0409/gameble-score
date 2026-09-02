@@ -110,7 +110,7 @@ const RecentRooms = ({
                 className="text-xs mt-0.5"
                 style={{ color: '#b8b8a8' }}
               >
-                房间号：{v.roomCode}
+                {gameType === 'mahjong' ? '房间号：' : '账本号：'}{v.roomCode}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">

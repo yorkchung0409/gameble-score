@@ -94,7 +94,9 @@ const RoomPage = () => {
     if (!roomCode) return;
     try {
       await navigator.clipboard.writeText(roomCode);
-      toast.success('房间号已复制');
+      toast.success(
+        data?.room.gameType === 'mahjong' ? '房间号已复制' : '账本号已复制',
+      );
     } catch {
       toast.error('复制失败');
     }
@@ -287,9 +289,13 @@ const RoomPage = () => {
                   className="flex items-center gap-1 text-sm cursor-pointer hover:opacity-70 transition-opacity ml-1"
                   style={{ color: '#e8c96a' }}
                   onClick={handleCopyRoomCode}
-                  title="点击复制房间号"
+                  title={
+                    data.room.gameType === 'mahjong' ? '点击复制房间号' : '点击复制账本号'
+                  }
                 >
-                  <span style={{ color: '#b8b8a8' }}>房间号：</span>
+                  <span style={{ color: '#b8b8a8' }}>
+                    {data.room.gameType === 'mahjong' ? '房间号：' : '账本号：'}
+                  </span>
                   <span className="font-mono font-medium">
                     {data.room.roomCode}
                   </span>
