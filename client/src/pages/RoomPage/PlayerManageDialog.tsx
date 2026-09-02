@@ -67,7 +67,7 @@ const PlayerManageDialog = ({
         className="max-w-md"
         style={{
           backgroundColor: '#0a3d22',
-          border: '1px solid rgba(212,175,55,0.3)',
+          border: '1px solid rgba(255,255,255,0.16)',
           color: '#f0f0e8',
         }}
       >
@@ -103,7 +103,7 @@ const PlayerManageDialog = ({
           style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
         >
           {players.length === 0 ? (
-            <div className="text-center py-8" style={{ color: '#b8b8a8' }}>
+            <div className="text-center py-8" style={{ color: '#c9c9bc' }}>
               暂无人员
             </div>
           ) : (
@@ -117,7 +117,7 @@ const PlayerManageDialog = ({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-[#b8b8a8] hover:text-red-400"
+                    className="h-8 w-8 text-[#c9c9bc] hover:text-red-400"
                     disabled={deletingId === p.id}
                     onClick={() => handleDelete(p.id, p.name)}
                   >
@@ -133,7 +133,7 @@ const PlayerManageDialog = ({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            style={{ color: '#f0f0e8', borderColor: 'rgba(212,175,55,0.3)' }}
+            style={{ color: '#f0f0e8', borderColor: 'rgba(255,255,255,0.16)' }}
           >
             关闭
           </Button>

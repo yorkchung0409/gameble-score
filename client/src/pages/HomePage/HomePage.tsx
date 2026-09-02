@@ -64,7 +64,7 @@ const HomePage = () => {
         background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
       }}
     >
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-[520px]">
         <div className="text-center mb-6">
           <h1
             className="text-4xl font-bold mb-2"
@@ -72,7 +72,7 @@ const HomePage = () => {
           >
             牌局记账
           </h1>
-          <p style={{ color: '#b8b8a8' }}>
+          <p style={{ color: '#c9c9bc' }}>
             多人云端协作，实时同步牌局数据
           </p>
           <p

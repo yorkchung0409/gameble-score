@@ -21,23 +21,23 @@ const ScoreBoard = ({
     const n = Number(val);
     if (n > 0) return '#22c55e';
     if (n < 0) return '#ef4444';
-    return '#b8b8a8';
+    return '#c9c9bc';
   };
 
   return (
     <div
       className="rounded-xl px-3 py-2.5 mb-4"
       style={{
-        backgroundColor: 'rgba(255,255,255,0.06)',
-        border: '1px solid rgba(212,175,55,0.3)',
-        boxShadow: '0 4px 20px rgba(212,175,55,0.15)',
+        backgroundColor: 'rgba(255,255,255,0.10)',
+        border: '1px solid rgba(255,255,255,0.16)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
       }}
     >
       <div className="flex flex-wrap items-center gap-3">
         {balances.length === 0 ? (
           <div
             className="text-xs flex-1 text-center py-1"
-            style={{ color: '#b8b8a8' }}
+            style={{ color: '#c9c9bc' }}
           >
             暂无入座玩家
           </div>
@@ -50,7 +50,7 @@ const ScoreBoard = ({
             >
               <div
                 className="text-xs mb-0.5 truncate max-w-full"
-                style={{ color: '#b8b8a8' }}
+                style={{ color: '#c9c9bc' }}
                 title={b.userName}
               >
                 {b.userName}
@@ -75,7 +75,7 @@ const ScoreBoard = ({
           >
             <div
               className="text-xs mb-0.5"
-              style={{ color: '#b8b8a8' }}
+              style={{ color: '#c9c9bc' }}
             >
               茶水费
             </div>
@@ -90,10 +90,10 @@ const ScoreBoard = ({
       </div>
       <div
         className="flex flex-wrap items-center justify-between gap-2 mt-2 pt-2 text-xs"
-        style={{ borderTop: '1px solid rgba(212,175,55,0.15)' }}
+        style={{ borderTop: '1px solid rgba(0,0,0,0.25)' }}
       >
         <div>
-          <span style={{ color: '#b8b8a8' }}>总流水：</span>
+          <span style={{ color: '#c9c9bc' }}>总流水：</span>
           <span
             className="font-mono font-semibold"
             style={{ color: '#f0f0e8' }}
@@ -102,7 +102,7 @@ const ScoreBoard = ({
           </span>
         </div>
         <div className="flex items-center">
-          <span style={{ color: '#b8b8a8' }}>账目：</span>
+          <span style={{ color: '#c9c9bc' }}>账目：</span>
           <span
             className="font-semibold"
             style={{

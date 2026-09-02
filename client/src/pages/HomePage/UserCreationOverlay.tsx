@@ -62,9 +62,9 @@ const UserCreationOverlay = ({
       <div
         className="w-full max-w-md rounded-xl p-8 shadow-lg"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(212,175,55,0.3)',
-          boxShadow: '0 4px 20px rgba(212,175,55,0.15)',
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          border: '1px solid rgba(255,255,255,0.16)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
         }}
       >
         <div className="text-center mb-8">
@@ -74,7 +74,7 @@ const UserCreationOverlay = ({
           >
             创建你的身份
           </h2>
-          <p style={{ color: '#b8b8a8' }}>
+          <p style={{ color: '#c9c9bc' }}>
             输入你的名字，在所有牌局中使用
           </p>
         </div>
@@ -82,7 +82,7 @@ const UserCreationOverlay = ({
           <div>
             <label
               className="block text-sm mb-2"
-              style={{ color: '#b8b8a8' }}
+              style={{ color: '#c9c9bc' }}
             >
               姓名
             </label>

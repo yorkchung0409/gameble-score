@@ -36,8 +36,8 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
     <div
       className="rounded-xl p-5 mb-4"
       style={{
-        backgroundColor: 'rgba(255,255,255,0.06)',
-        border: '1px solid rgba(212,175,55,0.3)',
+        backgroundColor: 'rgba(255,255,255,0.10)',
+        border: '1px solid rgba(255,255,255,0.16)',
         boxShadow: '0 4px 20px rgba(212,175,55,0.1)',
       }}
     >
@@ -50,7 +50,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
           <span
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
             style={{
-              backgroundColor: 'rgba(212,175,55,0.15)',
+              backgroundColor: 'rgba(0,0,0,0.25)',
               color: '#e8c96a',
             }}
           >
@@ -69,7 +69,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-[#b8b8a8] hover:text-[#f0f0e8]"
+              className="h-8 w-8 text-[#c9c9bc] hover:text-[#f0f0e8]"
               onClick={() => onEdit(game)}
             >
               <Pencil className="w-4 h-4" />
@@ -77,7 +77,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-[#b8b8a8] hover:text-red-400"
+              className="h-8 w-8 text-[#c9c9bc] hover:text-red-400"
               onClick={handleDelete}
             >
               <Trash2 className="w-4 h-4" />
@@ -90,14 +90,14 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
       <Table>
         <TableHeader>
           <TableRow className="border-b border-[rgba(212_175_55_0.15)] hover:bg-transparent">
-            <TableHead className="text-[#b8b8a8] font-normal">人员</TableHead>
-            <TableHead className="text-right text-[#b8b8a8] font-normal font-mono">
+            <TableHead className="text-[#c9c9bc] font-normal">人员</TableHead>
+            <TableHead className="text-right text-[#c9c9bc] font-normal font-mono">
               买入
             </TableHead>
-            <TableHead className="text-right text-[#b8b8a8] font-normal font-mono">
+            <TableHead className="text-right text-[#c9c9bc] font-normal font-mono">
               结余
             </TableHead>
-            <TableHead className="text-right text-[#b8b8a8] font-normal font-mono">
+            <TableHead className="text-right text-[#c9c9bc] font-normal font-mono">
               净盈亏
             </TableHead>
           </TableRow>

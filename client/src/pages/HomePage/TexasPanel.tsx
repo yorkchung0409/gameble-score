@@ -57,16 +57,16 @@ const TexasPanel = ({ gameType }: TexasPanelProps) => {
       <div
         className="rounded-xl p-6 shadow-lg"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(212,175,55,0.3)',
-          boxShadow: '0 4px 20px rgba(212,175,55,0.15)',
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          border: '1px solid rgba(255,255,255,0.16)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
         }}
       >
         <form onSubmit={handleCreate} className="flex flex-col gap-4">
           <div>
             <label
               className="block text-sm mb-1.5"
-              style={{ color: '#b8b8a8' }}
+              style={{ color: '#c9c9bc' }}
             >
               账本名称
             </label>

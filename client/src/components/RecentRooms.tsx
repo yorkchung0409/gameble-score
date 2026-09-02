@@ -50,9 +50,9 @@ const RecentRooms = ({
       <div
         className="rounded-xl p-6 text-center shadow-lg mb-4"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(212,175,55,0.3)',
-          color: '#b8b8a8',
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          border: '1px solid rgba(255,255,255,0.16)',
+          color: '#c9c9bc',
         }}
       >
         {emptyText}
@@ -80,9 +80,9 @@ const RecentRooms = ({
     <div
       className="rounded-xl p-4 shadow-lg mb-4"
       style={{
-        backgroundColor: 'rgba(255,255,255,0.06)',
-        border: '1px solid rgba(212,175,55,0.3)',
-        boxShadow: '0 4px 20px rgba(212,175,55,0.15)',
+        backgroundColor: 'rgba(255,255,255,0.10)',
+        border: '1px solid rgba(255,255,255,0.16)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
       }}
     >
       <div
@@ -108,7 +108,7 @@ const RecentRooms = ({
               </span>
               <span
                 className="text-xs mt-0.5"
-                style={{ color: '#b8b8a8' }}
+                style={{ color: '#c9c9bc' }}
               >
                 {gameType === 'mahjong' ? '房间号：' : '账本号：'}{v.roomCode}
               </span>
@@ -116,13 +116,13 @@ const RecentRooms = ({
             <div className="flex items-center gap-2 shrink-0">
               <span
                 className="text-xs"
-                style={{ color: '#b8b8a8' }}
+                style={{ color: '#c9c9bc' }}
               >
                 {formatTime(v.lastVisitedAt)}
               </span>
               <ChevronRight
                 className="w-4 h-4"
-                style={{ color: '#b8b8a8' }}
+                style={{ color: '#c9c9bc' }}
               />
             </div>
           </div>

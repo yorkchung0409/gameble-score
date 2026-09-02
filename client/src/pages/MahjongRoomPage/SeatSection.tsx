@@ -39,13 +39,13 @@ const SeatSection = ({
             key={idx}
             className="rounded-xl p-2.5 flex flex-col items-center relative"
             style={{
-              backgroundColor: 'rgba(255,255,255,0.06)',
+              backgroundColor: 'rgba(255,255,255,0.10)',
               border: isMe
                 ? '2px solid #d4af37'
-                : '1px solid rgba(212,175,55,0.3)',
+                : '1px solid rgba(255,255,255,0.16)',
               boxShadow: isMe
-                ? '0 4px 20px rgba(212,175,55,0.3)'
-                : '0 4px 20px rgba(212,175,55,0.15)',
+                ? '0 4px 20px rgba(255,255,255,0.16)'
+                : '0 4px 20px rgba(0,0,0,0.25)',
             }}
           >
             <div
@@ -108,7 +108,7 @@ const SeatSection = ({
               <>
                 <div
                   className="text-sm mb-2"
-                  style={{ color: '#b8b8a8' }}
+                  style={{ color: '#c9c9bc' }}
                 >
                   空位
                 </div>

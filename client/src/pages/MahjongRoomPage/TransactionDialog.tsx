@@ -148,7 +148,7 @@ const TransactionDialog = forwardRef<
         <DialogContent
           style={{
             backgroundColor: '#0a3d22',
-            border: '1px solid rgba(212,175,55,0.3)',
+            border: '1px solid rgba(255,255,255,0.16)',
             color: '#f0f0e8',
           }}
         >
@@ -161,14 +161,14 @@ const TransactionDialog = forwardRef<
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#b8b8a8' }}
+                style={{ color: '#c9c9bc' }}
               >
                 付款方
               </label>
               <div
                 className="flex items-center gap-2 px-3 py-2 rounded-md font-semibold"
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  backgroundColor: 'rgba(255,255,255,0.10)',
                   border: '1px solid rgba(212,175,55,0.2)',
                   color: '#e8c96a',
                 }}
@@ -180,7 +180,7 @@ const TransactionDialog = forwardRef<
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#b8b8a8' }}
+                style={{ color: '#c9c9bc' }}
               >
                 收款方
               </label>
@@ -191,7 +191,7 @@ const TransactionDialog = forwardRef<
                 <SelectContent
                   style={{
                     backgroundColor: '#0a3d22',
-                    border: '1px solid rgba(212,175,55,0.3)',
+                    border: '1px solid rgba(255,255,255,0.16)',
                     color: '#f0f0e8',
                   }}
                 >
@@ -213,7 +213,7 @@ const TransactionDialog = forwardRef<
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#b8b8a8' }}
+                style={{ color: '#c9c9bc' }}
               >
                 金额
               </label>
@@ -230,7 +230,7 @@ const TransactionDialog = forwardRef<
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#b8b8a8' }}
+                style={{ color: '#c9c9bc' }}
               >
                 备注（选填）
               </label>

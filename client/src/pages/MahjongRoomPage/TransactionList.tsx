@@ -26,9 +26,9 @@ const TransactionList = ({
       <div
         className="rounded-xl p-10 text-center"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(212,175,55,0.3)',
-          color: '#b8b8a8',
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          border: '1px solid rgba(255,255,255,0.16)',
+          color: '#c9c9bc',
         }}
       >
         还没有转账记录，点击手动转账开始记账
@@ -40,15 +40,15 @@ const TransactionList = ({
     <div
       className="rounded-xl overflow-hidden"
       style={{
-        backgroundColor: 'rgba(255,255,255,0.06)',
-        border: '1px solid rgba(212,175,55,0.3)',
+        backgroundColor: 'rgba(255,255,255,0.10)',
+        border: '1px solid rgba(255,255,255,0.16)',
       }}
     >
       <div
         className="px-4 py-3 text-sm font-semibold flex items-center justify-between"
         style={{
           color: '#e8c96a',
-          borderBottom: '1px solid rgba(212,175,55,0.15)',
+          borderBottom: '1px solid rgba(0,0,0,0.25)',
         }}
       >
         <span>转账记录</span>
@@ -56,7 +56,7 @@ const TransactionList = ({
           仅能冲正自己付款的记录
         </span>
       </div>
-      <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.10)' }}>
         {transactions.map((tx: MahjongTransaction) => {
           const isReversal = !!tx.reversalOf;
           const canReverse = tx.payerId === currentUserId;
@@ -70,7 +70,7 @@ const TransactionList = ({
               <div className="flex-1 min-w-0">
                 <div
                   className="text-xs mb-1 flex items-center gap-1.5"
-                  style={{ color: '#b8b8a8' }}
+                  style={{ color: '#c9c9bc' }}
                 >
                   {formatDate(tx.createdAt)}
                   {isReversal && (
@@ -90,7 +90,7 @@ const TransactionList = ({
                   style={{ color: '#f0f0e8' }}
                 >
                   <span style={{ color: '#ef4444' }}>{tx.payerName}</span>
-                  <span style={{ color: '#b8b8a8' }} className="mx-2">
+                  <span style={{ color: '#c9c9bc' }} className="mx-2">
                     →
                   </span>
                   <span style={{ color: '#22c55e' }}>
@@ -102,7 +102,7 @@ const TransactionList = ({
                 {tx.remark && (
                   <div
                     className="text-xs mt-1"
-                    style={{ color: '#b8b8a8' }}
+                    style={{ color: '#c9c9bc' }}
                   >
                     备注：{tx.remark}
                   </div>
@@ -112,7 +112,7 @@ const TransactionList = ({
                 <span
                   className="font-mono font-semibold"
                   style={{
-                    color: isReversal ? '#b8b8a8' : '#e8c96a',
+                    color: isReversal ? '#c9c9bc' : '#e8c96a',
                   }}
                 >
                   ¥{amountNum.toFixed(2)}
@@ -120,7 +120,7 @@ const TransactionList = ({
                 {canReverse && (
                   <button
                     className="p-1.5 rounded-md transition-colors hover:bg-white/10"
-                    style={{ color: '#b8b8a8' }}
+                    style={{ color: '#c9c9bc' }}
                     onClick={() => onReverse(tx)}
                     title="冲正（撤销这笔转账）"
                   >

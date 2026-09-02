@@ -142,7 +142,7 @@ const GameDialog = ({
         className="max-w-2xl max-h-[90vh] overflow-y-auto"
         style={{
           backgroundColor: '#0a3d22',
-          border: '1px solid rgba(212,175,55,0.3)',
+          border: '1px solid rgba(255,255,255,0.16)',
           color: '#f0f0e8',
         }}
       >
@@ -156,7 +156,7 @@ const GameDialog = ({
         <div>
           <label
             className="block text-sm mb-1.5"
-            style={{ color: '#b8b8a8' }}
+            style={{ color: '#c9c9bc' }}
           >
             日期
           </label>
@@ -167,7 +167,7 @@ const GameDialog = ({
                 className="w-full justify-start text-left font-normal"
                 style={{
                   color: '#f0f0e8',
-                  borderColor: 'rgba(212,175,55,0.3)',
+                  borderColor: 'rgba(255,255,255,0.16)',
                 }}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
@@ -186,7 +186,7 @@ const GameDialog = ({
         </div>
 
         {/* Player rows header */}
-        <div className="grid grid-cols-12 gap-2 text-sm" style={{ color: '#b8b8a8' }}>
+        <div className="grid grid-cols-12 gap-2 text-sm" style={{ color: '#c9c9bc' }}>
           <div className="col-span-4">人员</div>
           <div className="col-span-2 text-right">买入</div>
           <div className="col-span-2 text-right">结余</div>
@@ -201,7 +201,7 @@ const GameDialog = ({
               className="text-center py-6 rounded-lg"
               style={{
                 backgroundColor: 'rgba(255,255,255,0.04)',
-                color: '#b8b8a8',
+                color: '#c9c9bc',
               }}
             >
               还没有人员，点击下方「添加人员」按钮
@@ -214,7 +214,7 @@ const GameDialog = ({
                 : null;
             const netColor =
               net === null
-                ? '#b8b8a8'
+                ? '#c9c9bc'
                 : net > 0
                   ? '#ef4444'
                   : net < 0
@@ -282,7 +282,7 @@ const GameDialog = ({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 text-[#b8b8a8] hover:text-red-400"
+                    className="h-9 w-9 text-[#c9c9bc] hover:text-red-400"
                     onClick={() => removeRow(index)}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -299,7 +299,7 @@ const GameDialog = ({
           disabled={players.length === 0}
           style={{
             color: '#e8c96a',
-            borderColor: 'rgba(212,175,55,0.3)',
+            borderColor: 'rgba(255,255,255,0.16)',
           }}
         >
           <Plus className="w-4 h-4" />
@@ -312,7 +312,7 @@ const GameDialog = ({
             onClick={() => onOpenChange(false)}
             style={{
               color: '#f0f0e8',
-              borderColor: 'rgba(212,175,55,0.3)',
+              borderColor: 'rgba(255,255,255,0.16)',
             }}
           >
             取消

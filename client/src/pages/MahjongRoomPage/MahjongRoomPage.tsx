@@ -201,7 +201,7 @@ const MahjongRoomPage = () => {
         background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
       }}
     >
-      <div className="max-w-[960px] mx-auto px-5 py-6">
+      <div className="max-w-[520px] mx-auto px-5 py-6">
         <div className="flex items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
             <Button
@@ -210,7 +210,7 @@ const MahjongRoomPage = () => {
               className="h-9 w-9 shrink-0"
               style={{
                 color: '#e8c96a',
-                borderColor: 'rgba(212,175,55,0.3)',
+                borderColor: 'rgba(255,255,255,0.16)',
               }}
               onClick={() => navigate('/?game=mahjong')}
             >
@@ -220,7 +220,7 @@ const MahjongRoomPage = () => {
               <div className="flex items-center gap-2">
                 <span
                   className="text-sm font-medium"
-                  style={{ color: '#b8b8a8' }}
+                  style={{ color: '#c9c9bc' }}
                 >
                   麻将 ·
                 </span>
@@ -236,7 +236,7 @@ const MahjongRoomPage = () => {
                 onClick={handleCopyRoomCode}
                 title="点击复制房间号"
               >
-                <span className="text-xs" style={{ color: '#b8b8a8' }}>
+                <span className="text-xs" style={{ color: '#c9c9bc' }}>
                   房间号：
                 </span>
                 <span
@@ -250,7 +250,7 @@ const MahjongRoomPage = () => {
                   style={{ color: '#e8c96a' }}
                 />
               </div>
-              <p className="text-sm mt-0.5" style={{ color: '#b8b8a8' }}>
+              <p className="text-sm mt-0.5" style={{ color: '#c9c9bc' }}>
                 你是：{currentUser?.name ?? '未设置昵称'}
               </p>
             </div>

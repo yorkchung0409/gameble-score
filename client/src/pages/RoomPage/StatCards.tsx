@@ -13,12 +13,12 @@ const StatCards = ({ stats }: StatCardsProps) => {
       <div
         className="rounded-xl p-5"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(212,175,55,0.3)',
-          boxShadow: '0 4px 20px rgba(212,175,55,0.15)',
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          border: '1px solid rgba(255,255,255,0.16)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
         }}
       >
-        <div className="text-sm mb-1" style={{ color: '#b8b8a8' }}>
+        <div className="text-sm mb-1" style={{ color: '#c9c9bc' }}>
           总场次
         </div>
         <div
@@ -31,17 +31,17 @@ const StatCards = ({ stats }: StatCardsProps) => {
       <div
         className="rounded-xl p-5"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(212,175,55,0.3)',
-          boxShadow: '0 4px 20px rgba(212,175,55,0.15)',
+          backgroundColor: 'rgba(232,201,106,0.10)',
+          border: '1px solid rgba(232,201,106,0.35)',
+          boxShadow: '0 4px 20px rgba(232,201,106,0.15)',
         }}
       >
-        <div className="text-sm mb-1" style={{ color: '#b8b8a8' }}>
+        <div className="text-sm mb-1" style={{ color: '#c9c9bc' }}>
           总买入
         </div>
         <div
-          className="text-3xl font-bold font-mono"
-          style={{ color: '#e8c96a' }}
+          className="text-4xl font-bold font-mono"
+          style={{ color: '#f0d060' }}
         >
           ¥{Number(stats.totalBuyIn || 0).toFixed(2)}
         </div>
@@ -49,12 +49,12 @@ const StatCards = ({ stats }: StatCardsProps) => {
       <div
         className="rounded-xl p-5"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(212,175,55,0.3)',
-          boxShadow: '0 4px 20px rgba(212,175,55,0.15)',
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          border: '1px solid rgba(255,255,255,0.16)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
         }}
       >
-        <div className="text-sm mb-1" style={{ color: '#b8b8a8' }}>
+        <div className="text-sm mb-1" style={{ color: '#c9c9bc' }}>
           流水差
         </div>
         <div
@@ -72,12 +72,12 @@ const StatCards = ({ stats }: StatCardsProps) => {
       <div
         className="rounded-xl p-5"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(212,175,55,0.3)',
-          boxShadow: '0 4px 20px rgba(212,175,55,0.15)',
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          border: '1px solid rgba(255,255,255,0.16)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
         }}
       >
-        <div className="text-sm mb-1" style={{ color: '#b8b8a8' }}>
+        <div className="text-sm mb-1" style={{ color: '#c9c9bc' }}>
           本局流水
         </div>
         <div
