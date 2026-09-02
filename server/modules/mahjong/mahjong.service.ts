@@ -9,6 +9,11 @@ import {
 } from '@nestjs/common';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import {
+  generateRoomCode,
+  extractPostgresErrorCode,
+  normalizeRoomCode,
+} from '@server/common/utils';
+import {
   users,
   mahjongRooms,
   mahjongSeats,
@@ -25,25 +30,6 @@ import type {
   MahjongTransaction,
   CreateTransactionRequest,
 } from '@shared/api.interface';
-
-function generateRoomCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-function extractPostgresErrorCode(error: unknown): string | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth += 1) {
-    const { code, cause } = current as { code?: unknown; cause?: unknown };
-    if (typeof code === 'string') return code;
-    current = cause;
-  }
-  return undefined;
-}
 
 function toMahjongUser(row: typeof users.$inferSelect): MahjongUser {
   return {
@@ -73,8 +59,12 @@ export class MahjongService {
   // ---------- 用户相关 ----------
 
   async createUser(name: string, deviceId: string): Promise<CreateUserResponse> {
-    if (!name || name.trim().length === 0) {
+    const trimmedName = (name || '').trim();
+    if (!trimmedName) {
       throw new BadRequestException('用户名不能为空');
+    }
+    if (trimmedName.length > 30) {
+      throw new BadRequestException('用户名不能超过 30 个字符');
     }
     if (!deviceId || deviceId.trim().length === 0) {
       throw new BadRequestException('设备ID不能为空');
@@ -101,7 +91,7 @@ export class MahjongService {
     try {
       const [row] = await this.db
         .insert(users)
-        .values({ name, deviceId })
+        .values({ name: trimmedName, deviceId: deviceId.trim() })
         .returning();
       return { user: toMahjongUser(row) };
     } catch (error) {
@@ -140,12 +130,16 @@ export class MahjongService {
     roomCode: string | undefined,
     name: string,
   ): Promise<CreateMahjongRoomResponse> {
-    if (!name || name.trim().length === 0) {
+    const normalizedName = (name || '').trim();
+    if (!normalizedName) {
       throw new BadRequestException('房间名称不能为空');
+    }
+    if (normalizedName.length > 50) {
+      throw new BadRequestException('房间名称不能超过 50 个字符');
     }
 
     if (roomCode && roomCode.length > 0) {
-      const upperCode = roomCode.toUpperCase();
+      const upperCode = normalizeRoomCode(roomCode);
       const existing = await this.db
         .select({ id: mahjongRooms.id })
         .from(mahjongRooms)
@@ -155,7 +149,7 @@ export class MahjongService {
       }
       const [row] = await this.db
         .insert(mahjongRooms)
-        .values({ roomCode: upperCode, name })
+        .values({ roomCode: upperCode, name: normalizedName })
         .returning();
       return { room: toMahjongRoom(row) };
     }
@@ -166,7 +160,7 @@ export class MahjongService {
       try {
         const [row] = await this.db
           .insert(mahjongRooms)
-          .values({ roomCode: code, name })
+          .values({ roomCode: code, name: normalizedName })
           .returning();
         return { room: toMahjongRoom(row) };
       } catch (error) {
@@ -187,7 +181,7 @@ export class MahjongService {
     const roomRows = await this.db
       .select()
       .from(mahjongRooms)
-      .where(eq(mahjongRooms.roomCode, roomCode.toUpperCase()));
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
@@ -351,7 +345,7 @@ export class MahjongService {
     const roomRows = await this.db
       .select({ id: mahjongRooms.id })
       .from(mahjongRooms)
-      .where(eq(mahjongRooms.roomCode, roomCode.toUpperCase()));
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
@@ -410,7 +404,7 @@ export class MahjongService {
     const roomRows = await this.db
       .select({ id: mahjongRooms.id })
       .from(mahjongRooms)
-      .where(eq(mahjongRooms.roomCode, roomCode.toUpperCase()));
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
@@ -446,7 +440,7 @@ export class MahjongService {
     const roomRows = await this.db
       .select({ id: mahjongRooms.id })
       .from(mahjongRooms)
-      .where(eq(mahjongRooms.roomCode, roomCode.toUpperCase()));
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
@@ -509,7 +503,7 @@ export class MahjongService {
     const roomRows = await this.db
       .select({ id: mahjongRooms.id })
       .from(mahjongRooms)
-      .where(eq(mahjongRooms.roomCode, roomCode.toUpperCase()));
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }

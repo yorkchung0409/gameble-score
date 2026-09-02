@@ -7,6 +7,12 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
+import {
+  generateRoomCode,
+  extractPostgresErrorCode,
+  normalizeRoomCode,
+  parseNonNegativeAmount,
+} from '@server/common/utils';
 import { rooms, players, games, gamePlayers } from '@server/database/schema';
 import { eq, desc, inArray, and, sql, sum } from 'drizzle-orm';
 import type {
@@ -20,25 +26,6 @@ import type {
   UpdateGameRequest,
   CreateGameResponse,
 } from '@shared/api.interface';
-
-function generateRoomCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-function extractPostgresErrorCode(error: unknown): string | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth += 1) {
-    const { code, cause } = current as { code?: unknown; cause?: unknown };
-    if (typeof code === 'string') return code;
-    current = cause;
-  }
-  return undefined;
-}
 
 function toRoom(row: typeof rooms.$inferSelect): Room {
   return {
@@ -70,17 +57,26 @@ export class PokerService {
     roomName: string,
     gameType: string = 'texas',
   ): Promise<CreateRoomResponse> {
+    const normalizedName = (roomName || '').trim();
+    if (!normalizedName) {
+      throw new BadRequestException('房间名称不能为空');
+    }
+    if (normalizedName.length > 50) {
+      throw new BadRequestException('房间名称不能超过 50 个字符');
+    }
+
     if (roomCode && roomCode.length > 0) {
+      const upperCode = normalizeRoomCode(roomCode);
       const existing = await this.db
         .select({ id: rooms.id })
         .from(rooms)
-        .where(eq(rooms.roomCode, roomCode.toUpperCase()));
+        .where(eq(rooms.roomCode, upperCode));
       if (existing.length > 0) {
         throw new ConflictException('房间码已存在');
       }
       const [row] = await this.db
           .insert(rooms)
-          .values({ roomCode: roomCode.toUpperCase(), roomName, gameType })
+          .values({ roomCode: upperCode, roomName: normalizedName, gameType })
           .returning();
       return { room: toRoom(row) };
     }
@@ -286,6 +282,24 @@ export class PokerService {
 
     const roomId = roomRows[0].id;
 
+    if (dto.players.length > 100) {
+      throw new BadRequestException('单局玩家数量不能超过 100');
+    }
+    // 校验金额非负
+    for (const p of dto.players) {
+      parseNonNegativeAmount(p.buyIn, '买入');
+      parseNonNegativeAmount(p.balance, '结余');
+    }
+    // 校验玩家都属于该房间（防注入不属于房间的玩家）
+    const cgPlayerIds = Array.from(new Set(dto.players.map((p) => p.playerId)));
+    const cgRoomPlayers = await this.db
+      .select({ id: players.id })
+      .from(players)
+      .where(and(eq(players.roomId, roomId), inArray(players.id, cgPlayerIds)));
+    if (cgRoomPlayers.length !== cgPlayerIds.length) {
+      throw new BadRequestException('存在不属于该房间的玩家');
+    }
+
     const result = await this.db.transaction(async (tx) => {
       const [gameRow] = await tx
         .insert(games)
@@ -295,13 +309,17 @@ export class PokerService {
       const gpRows = await tx
         .insert(gamePlayers)
         .values(
-          dto.players.map((p) => ({
-            gameId: gameRow.id,
-            playerId: p.playerId,
-            buyIn: String(p.buyIn),
-            balance: String(p.balance),
-            netProfit: String(p.balance - p.buyIn),
-          })),
+          dto.players.map((p) => {
+            const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
+            const balance = parseNonNegativeAmount(p.balance, '结余');
+            return {
+              gameId: gameRow.id,
+              playerId: p.playerId,
+              buyIn: String(buyIn),
+              balance: String(balance),
+              netProfit: String(Math.round((balance - buyIn) * 100) / 100),
+            };
+          }),
         )
         .returning();
 
@@ -367,6 +385,28 @@ export class PokerService {
       throw new NotFoundException('牌局不存在');
     }
 
+    if (dto.players !== undefined) {
+      if (dto.players.length === 0) {
+        throw new BadRequestException('牌局至少需要一名玩家');
+      }
+      if (dto.players.length > 100) {
+        throw new BadRequestException('单局玩家数量不能超过 100');
+      }
+      for (const p of dto.players) {
+        parseNonNegativeAmount(p.buyIn, '买入');
+        parseNonNegativeAmount(p.balance, '结余');
+      }
+      // 校验玩家都属于该房间
+      const ugPlayerIds = Array.from(new Set(dto.players.map((p) => p.playerId)));
+      const ugRoomPlayers = await this.db
+        .select({ id: players.id })
+        .from(players)
+        .where(and(eq(players.roomId, roomId), inArray(players.id, ugPlayerIds)));
+      if (ugRoomPlayers.length !== ugPlayerIds.length) {
+        throw new BadRequestException('存在不属于该房间的玩家');
+      }
+    }
+
     const result = await this.db.transaction(async (tx) => {
       const patch: Partial<typeof games.$inferInsert> = {};
       if (dto.gameDate !== undefined) {
@@ -385,21 +425,22 @@ export class PokerService {
       let gamePlayerList: GamePlayer[] = [];
 
       if (dto.players !== undefined) {
-        if (dto.players.length === 0) {
-          throw new BadRequestException('牌局至少需要一名玩家');
-        }
         await tx.delete(gamePlayers).where(eq(gamePlayers.gameId, gameId));
 
         const gpRows = await tx
           .insert(gamePlayers)
           .values(
-            dto.players.map((p) => ({
-              gameId,
-              playerId: p.playerId,
-              buyIn: String(p.buyIn),
-              balance: String(p.balance),
-              netProfit: String(p.balance - p.buyIn),
-            })),
+            dto.players.map((p) => {
+              const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
+              const balance = parseNonNegativeAmount(p.balance, '结余');
+              return {
+                gameId,
+                playerId: p.playerId,
+                buyIn: String(buyIn),
+                balance: String(balance),
+                netProfit: String(Math.round((balance - buyIn) * 100) / 100),
+              };
+            }),
           )
           .returning();
 

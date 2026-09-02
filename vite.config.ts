@@ -16,6 +16,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'dist/client'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'data-vendor': ['axios', 'dayjs'],
+        },
+      },
+    },
   },
   server: {
     port: 5173,

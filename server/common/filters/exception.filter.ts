@@ -60,16 +60,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         },
       };
     } else {
-      // 未知异常
+      // 未知异常（生产环境不向客户端泄露内部堆栈）
       httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
+      const err = exception as Error;
+      const errorBody: {
+        code: string;
+        message: string;
+        timestamp: number;
+        stack?: string;
+        cause?: string;
+      } = {
+        code: ResponseCode.INTERNAL_ERROR,
+        message: '服务器内部错误',
+        timestamp: Date.now(),
+      };
+      if (process.env.NODE_ENV !== 'production') {
+        errorBody.stack = err.stack;
+        if (err.cause) errorBody.cause = String(err.cause);
+      }
       errorResponse = {
-        error: {
-          code: ResponseCode.INTERNAL_ERROR,
-          message: '服务器内部错误',
-          stack: (exception as Error).stack,
-          cause: (exception as Error).cause as string,
-          timestamp: Date.now(),
-        },
+        error: errorBody,
       };
     }
 

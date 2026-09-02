@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { join } from 'path';
 import { __express as hbsExpressEngine } from 'hbs';
 import * as dotenv from 'dotenv';
+import type { Request, Response } from 'express';
 
 dotenv.config();
 
@@ -14,9 +15,15 @@ async function bootstrap() {
     abortOnError: process.env.NODE_ENV !== 'development',
   });
 
-  // CORS
+  // 健康检查（供 Railway 等 PaaS 探活）
+  app.use('/health', (_req: Request, res: Response) => {
+    res.json({ status: 'ok', time: new Date().toISOString() });
+  });
+
+  // CORS：默认同源；可通过 CORS_ORIGIN 环境变量显式指定允许的来源（逗号分隔）
+  const corsOrigin = process.env.CORS_ORIGIN;
   app.enableCors({
-    origin: true,
+    origin: corsOrigin ? corsOrigin.split(',').map((s) => s.trim()) : true,
     credentials: true,
   });
 
