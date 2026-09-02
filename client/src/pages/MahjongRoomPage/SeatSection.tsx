@@ -1,6 +1,6 @@
 import type { MahjongSeat } from '@shared/api.interface';
 import { Button } from '@client/src/components/ui/button';
-import { Plus, LogOut, ArrowLeftRight } from 'lucide-react';
+import { Plus, LogOut } from 'lucide-react';
 
 interface SeatSectionProps {
   seats: MahjongSeat[];
@@ -98,7 +98,27 @@ const SeatSection = ({
                     aria-label="转账"
                     title={`向 ${seat.userName} 转账`}
                   >
-                    <ArrowLeftRight />
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="size-3.5"
+                      aria-hidden="true"
+                    >
+                      {/* 金币 */}
+                      <circle cx="8.5" cy="12" r="5" />
+                      {/* 币面 ¥ */}
+                      <path d="M8.5 9.6 6.3 12.9" />
+                      <path d="M10.7 9.6 8.5 12.9" />
+                      <path d="M6.7 11.2h3.6" />
+                      <path d="M8.5 12.9v2.5" />
+                      {/* 转出箭头 */}
+                      <path d="M13 8.5 20 4" />
+                      <path d="M13 8.5h7v-4.5" />
+                    </svg>
                   </Button>
                 ) : (
                   <div className="h-7 w-7" />
