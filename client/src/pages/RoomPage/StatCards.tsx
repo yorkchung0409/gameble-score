@@ -23,7 +23,7 @@ const StatCards = ({ stats }: StatCardsProps) => {
         </div>
         <div
           className="text-3xl font-bold font-mono"
-          style={{ color: '#e8c96a' }}
+          style={{ color: '#f2f2ea' }}
         >
           {stats.totalGames}
         </div>
@@ -82,7 +82,7 @@ const StatCards = ({ stats }: StatCardsProps) => {
         </div>
         <div
           className="text-3xl font-bold font-mono"
-          style={{ color: '#e8c96a' }}
+          style={{ color: '#f2f2ea' }}
         >
           ¥{Number(stats.latestGameTurnover || 0).toFixed(2)}
         </div>

@@ -50,7 +50,7 @@ const SeatSection = ({
           >
             <div
               className="text-[10px] mb-1.5 font-medium"
-              style={{ color: '#e8c96a' }}
+              style={{ color: '#c9c9bc' }}
             >
               {SEAT_NAMES[idx]}
             </div>

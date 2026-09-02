@@ -72,7 +72,7 @@ const PlayerManageDialog = ({
         }}
       >
         <DialogHeader>
-          <DialogTitle style={{ color: '#e8c96a' }}>人员管理</DialogTitle>
+          <DialogTitle style={{ color: '#f2f2ea' }}>人员管理</DialogTitle>
         </DialogHeader>
 
         <div className="flex gap-2">

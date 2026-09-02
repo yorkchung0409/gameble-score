@@ -77,7 +77,7 @@ const HomePage = () => {
           </p>
           <p
             className="text-sm mt-2"
-            style={{ color: '#e8c96a' }}
+            style={{ color: '#c9c9bc' }}
           >
             你是：{currentUser.name}
           </p>

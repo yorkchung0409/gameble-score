@@ -147,7 +147,7 @@ const GameDialog = ({
         }}
       >
         <DialogHeader>
-          <DialogTitle style={{ color: '#e8c96a' }}>
+          <DialogTitle style={{ color: '#f2f2ea' }}>
             {isEdit ? '编辑牌局' : '添加牌局'}
           </DialogTitle>
         </DialogHeader>
@@ -298,7 +298,7 @@ const GameDialog = ({
           onClick={addRow}
           disabled={players.length === 0}
           style={{
-            color: '#e8c96a',
+            color: '#f2f2ea',
             borderColor: 'rgba(255,255,255,0.16)',
           }}
         >

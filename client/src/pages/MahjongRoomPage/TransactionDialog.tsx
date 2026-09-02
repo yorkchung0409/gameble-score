@@ -153,7 +153,7 @@ const TransactionDialog = forwardRef<
           }}
         >
           <DialogHeader>
-            <DialogTitle style={{ color: '#e8c96a' }}>
+            <DialogTitle style={{ color: '#f2f2ea' }}>
               手动转账
             </DialogTitle>
           </DialogHeader>
@@ -169,8 +169,8 @@ const TransactionDialog = forwardRef<
                 className="flex items-center gap-2 px-3 py-2 rounded-md font-semibold"
                 style={{
                   backgroundColor: 'rgba(255,255,255,0.10)',
-                  border: '1px solid rgba(212,175,55,0.2)',
-                  color: '#e8c96a',
+                  border: '1px solid rgba(255,255,255,0.16)',
+                  color: '#f2f2ea',
                 }}
               >
                 <User className="w-4 h-4" />

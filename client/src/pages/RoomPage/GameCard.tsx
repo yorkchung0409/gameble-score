@@ -38,7 +38,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
       style={{
         backgroundColor: 'rgba(255,255,255,0.10)',
         border: '1px solid rgba(255,255,255,0.16)',
-        boxShadow: '0 4px 20px rgba(212,175,55,0.1)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
       }}
     >
       {/* Header */}
@@ -51,7 +51,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
             style={{
               backgroundColor: 'rgba(0,0,0,0.25)',
-              color: '#e8c96a',
+              color: '#f2f2ea',
             }}
           >
             <Users className="w-3 h-3" />
@@ -61,7 +61,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
         <div className="flex items-center gap-3">
           <span
             className="font-mono font-semibold"
-            style={{ color: '#e8c96a' }}
+            style={{ color: '#f2f2ea' }}
           >
             总买入 ¥{formatAmount(game.totalBuyIn)}
           </span>
@@ -89,7 +89,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
       {/* Table */}
       <Table>
         <TableHeader>
-          <TableRow className="border-b border-[rgba(212_175_55_0.15)] hover:bg-transparent">
+          <TableRow className="border-b border-[rgba(255_255_255_0.15)] hover:bg-transparent">
             <TableHead className="text-[#c9c9bc] font-normal">人员</TableHead>
             <TableHead className="text-right text-[#c9c9bc] font-normal font-mono">
               买入

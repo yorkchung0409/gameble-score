@@ -209,7 +209,7 @@ const MahjongRoomPage = () => {
               variant="outline"
               className="h-9 w-9 shrink-0"
               style={{
-                color: '#e8c96a',
+                color: '#f2f2ea',
                 borderColor: 'rgba(255,255,255,0.16)',
               }}
               onClick={() => navigate('/?game=mahjong')}
@@ -226,7 +226,7 @@ const MahjongRoomPage = () => {
                 </span>
                 <h1
                   className="text-xl font-bold"
-                  style={{ color: '#e8c96a' }}
+                  style={{ color: '#f2f2ea' }}
                 >
                   {data.room.name}
                 </h1>
@@ -241,13 +241,13 @@ const MahjongRoomPage = () => {
                 </span>
                 <span
                   className="text-xs font-mono font-medium"
-                  style={{ color: '#e8c96a' }}
+                  style={{ color: '#f2f2ea' }}
                 >
                   {data.room.roomCode}
                 </span>
                 <Copy
                   className="w-3 h-3"
-                  style={{ color: '#e8c96a' }}
+                  style={{ color: '#f2f2ea' }}
                 />
               </div>
               <p className="text-sm mt-0.5" style={{ color: '#c9c9bc' }}>

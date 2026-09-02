@@ -87,7 +87,7 @@ const RecentRooms = ({
     >
       <div
         className="flex items-center gap-2 mb-3"
-        style={{ color: '#e8c96a' }}
+        style={{ color: '#f2f2ea' }}
       >
         <Clock className="w-4 h-4" />
         <span className="text-sm font-semibold">最近进入</span>

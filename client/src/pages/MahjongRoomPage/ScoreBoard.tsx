@@ -70,7 +70,7 @@ const ScoreBoard = ({
             className="flex flex-col items-center"
             style={{
               paddingLeft: '12px',
-              borderLeft: '1px solid rgba(212,175,55,0.2)',
+              borderLeft: '1px solid rgba(255,255,255,0.16)',
             }}
           >
             <div

@@ -47,7 +47,7 @@ const TransactionList = ({
       <div
         className="px-4 py-3 text-sm font-semibold flex items-center justify-between"
         style={{
-          color: '#e8c96a',
+          color: '#f2f2ea',
           borderBottom: '1px solid rgba(0,0,0,0.25)',
         }}
       >
@@ -112,7 +112,7 @@ const TransactionList = ({
                 <span
                   className="font-mono font-semibold"
                   style={{
-                    color: isReversal ? '#c9c9bc' : '#e8c96a',
+                    color: isReversal ? '#c9c9bc' : '#f2f2ea',
                   }}
                 >
                   ¥{amountNum.toFixed(2)}

@@ -219,7 +219,7 @@ const RoomPage = () => {
               variant="outline"
               className="h-9 w-9 shrink-0"
               style={{
-                color: '#e8c96a',
+                color: '#f2f2ea',
                 borderColor: 'rgba(255,255,255,0.16)',
               }}
               onClick={() =>
@@ -239,7 +239,7 @@ const RoomPage = () => {
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   className="text-xl font-bold h-9 w-60"
-                  style={{ color: '#e8c96a' }}
+                  style={{ color: '#f2f2ea' }}
                   autoFocus
                 />
                 <Button
@@ -274,7 +274,7 @@ const RoomPage = () => {
                 </span>
                 <h1
                   className="text-xl font-bold cursor-pointer hover:opacity-80"
-                  style={{ color: '#e8c96a' }}
+                  style={{ color: '#f2f2ea' }}
                   onClick={startEditName}
                 >
                   {data.room.roomName}
@@ -287,7 +287,7 @@ const RoomPage = () => {
                 <button
                   type="button"
                   className="flex items-center gap-1 text-sm cursor-pointer hover:opacity-70 transition-opacity ml-1"
-                  style={{ color: '#e8c96a' }}
+                  style={{ color: '#f2f2ea' }}
                   onClick={handleCopyRoomCode}
                   title={
                     data.room.gameType === 'mahjong' ? '点击复制房间号' : '点击复制账本号'
@@ -309,7 +309,7 @@ const RoomPage = () => {
             <Button
               variant="outline"
               style={{
-                color: '#e8c96a',
+                color: '#f2f2ea',
                 borderColor: 'rgba(255,255,255,0.16)',
               }}
               onClick={() => setPlayerDialogOpen(true)}
@@ -339,7 +339,7 @@ const RoomPage = () => {
         <div>
           <h2
             className="text-lg font-semibold mb-3"
-            style={{ color: '#e8c96a' }}
+            style={{ color: '#f2f2ea' }}
           >
             牌局记录
           </h2>
