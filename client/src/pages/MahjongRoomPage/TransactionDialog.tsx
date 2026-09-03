@@ -189,38 +189,39 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
             <div className="flex flex-col items-center gap-1">
               <Select value={payeeValue} onValueChange={setPayeeValue}>
                 <SelectTrigger
-                  className="flex flex-col items-center gap-1 border-0 bg-transparent w-auto"
-                  style={{
-                    color: '#222B26',
-                    height: 'auto',
-                    padding: 0,
-                    boxShadow: 'none',
-                  }}
+                  asChild
+                  className="border-0 bg-transparent p-0 shadow-none justify-center rounded-none"
+                  style={{ height: 'auto', color: '#222B26', boxShadow: 'none' }}
                 >
-                  {isTeaFee ? (
-                    <span
-                      className="h-11 w-11 rounded-full flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: '#B08D1E', color: '#ffffff' }}
-                      aria-hidden="true"
-                    >
-                      <TeaFeeIcon size={22} />
-                    </span>
-                  ) : (
-                    <span
-                      className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold shrink-0"
-                      style={{ backgroundColor: avatarColor(payeeValue), color: '#ffffff' }}
-                      aria-hidden="true"
-                    >
-                      {(payeeName || '?').trim().charAt(0)}
-                    </span>
-                  )}
-                  <span
-                    className="text-xs flex items-center gap-0.5"
-                    style={{ color: '#222B26' }}
+                  <button
+                    type="button"
+                    className="flex flex-col items-center gap-1 outline-none"
                   >
-                    {payeeName}
-                    <ChevronDown className="w-3 h-3" style={{ color: '#6B7A70' }} />
-                  </span>
+                    {isTeaFee ? (
+                      <span
+                        className="h-11 w-11 rounded-full flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: '#B08D1E', color: '#ffffff' }}
+                        aria-hidden="true"
+                      >
+                        <TeaFeeIcon size={22} />
+                      </span>
+                    ) : (
+                      <span
+                        className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold shrink-0"
+                        style={{ backgroundColor: avatarColor(payeeValue), color: '#ffffff' }}
+                        aria-hidden="true"
+                      >
+                        {(payeeName || '?').trim().charAt(0)}
+                      </span>
+                    )}
+                    <span
+                      className="text-xs flex items-center gap-0.5"
+                      style={{ color: '#222B26' }}
+                    >
+                      {payeeName}
+                      <ChevronDown className="size-3" style={{ color: '#6B7A70' }} />
+                    </span>
+                  </button>
                 </SelectTrigger>
                 <SelectContent
                   style={{
