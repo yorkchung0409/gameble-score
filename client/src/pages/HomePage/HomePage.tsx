@@ -15,6 +15,29 @@ import MahjongPanel from './MahjongPanel';
 const GAME_TEXAS = 'texas';
 const GAME_MAHJONG = 'mahjong';
 
+const AVATAR_COLORS = [
+  '#e8a13c',
+  '#7fb3e0',
+  '#e0706f',
+  '#6fbf8b',
+  '#9d8ad6',
+  '#4db6ac',
+  '#e57fb0',
+  '#f28d4f',
+];
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function avatarColor(userId: string): string {
+  return AVATAR_COLORS[hashCode(userId) % AVATAR_COLORS.length];
+}
+
 const HomePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { deviceId, currentUser, setCurrentUser } = useMahjongUser();
@@ -74,20 +97,23 @@ const HomePage = () => {
           }}
         >
           <h1
-            className="text-4xl font-bold mb-2"
+            className="text-4xl font-bold mb-3"
             style={{ color: '#B08D1E' }}
           >
             牌局记账
           </h1>
-          <p style={{ color: '#6B7A70' }}>
-            多人云端协作，实时同步牌局数据
-          </p>
-          <p
-            className="text-sm mt-2"
-            style={{ color: '#6B7A70' }}
-          >
-            你是：{currentUser.name}
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <span
+              className="h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+              style={{ backgroundColor: avatarColor(currentUser.id), color: '#ffffff' }}
+              aria-hidden="true"
+            >
+              {currentUser.name.trim().charAt(0) || '?'}
+            </span>
+            <span className="text-sm font-medium" style={{ color: '#222B26' }}>
+              {currentUser.name}
+            </span>
+          </div>
         </div>
 
         <Tabs
