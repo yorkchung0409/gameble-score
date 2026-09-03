@@ -332,7 +332,7 @@ const RoomPage = () => {
 
         {/* Stat cards */}
         <div className="mb-6">
-          <StatCards stats={data.stats} />
+          <StatCards totalGames={data.stats.totalGames} />
         </div>
 
         {/* Game list */}

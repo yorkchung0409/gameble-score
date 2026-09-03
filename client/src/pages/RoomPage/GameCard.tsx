@@ -42,13 +42,16 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <span className="text-base font-semibold" style={{ color: '#f0f0e8' }}>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="text-base font-semibold whitespace-nowrap"
+            style={{ color: '#f0f0e8' }}
+          >
             {game.gameDate}
           </span>
           <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap shrink-0"
             style={{
               backgroundColor: 'rgba(0,0,0,0.25)',
               color: '#f2f2ea',
@@ -58,9 +61,9 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
             {game.playerCount}人
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           <span
-            className="font-mono font-semibold"
+            className="font-mono font-semibold whitespace-nowrap"
             style={{ color: '#f2f2ea' }}
           >
             总买入 ¥{formatAmount(game.totalBuyIn)}

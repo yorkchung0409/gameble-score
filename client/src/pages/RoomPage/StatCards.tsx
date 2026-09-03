@@ -1,92 +1,26 @@
 interface StatCardsProps {
-  stats: {
-    totalGames: number;
-    totalBuyIn: string;
-    latestGameBalanceDiff: string;
-    latestGameTurnover: string;
-  };
+  totalGames: number;
 }
 
-const StatCards = ({ stats }: StatCardsProps) => {
+const StatCards = ({ totalGames }: StatCardsProps) => {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-ai-section-type="card-stat">
-      <div
-        className="rounded-xl p-5"
-        style={{
-          backgroundColor: 'rgba(255,255,255,0.10)',
-          border: '1px solid rgba(255,255,255,0.16)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
-        }}
+    <div
+      className="flex items-center justify-between rounded-xl px-5 py-4 mb-4"
+      style={{
+        backgroundColor: 'rgba(255,255,255,0.10)',
+        border: '1px solid rgba(255,255,255,0.16)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+      }}
+    >
+      <span className="text-sm" style={{ color: '#c9c9bc' }}>
+        总场次
+      </span>
+      <span
+        className="text-2xl font-bold font-mono"
+        style={{ color: '#f2f2ea' }}
       >
-        <div className="text-sm mb-1" style={{ color: '#c9c9bc' }}>
-          总场次
-        </div>
-        <div
-          className="text-3xl font-bold font-mono"
-          style={{ color: '#f2f2ea' }}
-        >
-          {stats.totalGames}
-        </div>
-      </div>
-      <div
-        className="rounded-xl p-5"
-        style={{
-          backgroundColor: 'rgba(232,201,106,0.10)',
-          border: '1px solid rgba(232,201,106,0.35)',
-          boxShadow: '0 4px 20px rgba(232,201,106,0.15)',
-        }}
-      >
-        <div className="text-sm mb-1" style={{ color: '#c9c9bc' }}>
-          总买入
-        </div>
-        <div
-          className="text-4xl font-bold font-mono"
-          style={{ color: '#f0d060' }}
-        >
-          ¥{Number(stats.totalBuyIn || 0).toFixed(2)}
-        </div>
-      </div>
-      <div
-        className="rounded-xl p-5"
-        style={{
-          backgroundColor: 'rgba(255,255,255,0.10)',
-          border: '1px solid rgba(255,255,255,0.16)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
-        }}
-      >
-        <div className="text-sm mb-1" style={{ color: '#c9c9bc' }}>
-          流水差
-        </div>
-        <div
-          className="text-3xl font-bold font-mono"
-          style={{
-            color:
-              Number(stats.latestGameBalanceDiff || 0) === 0
-                ? '#22c55e'
-                : '#ef4444',
-          }}
-        >
-          ¥{Number(stats.latestGameBalanceDiff || 0).toFixed(2)}
-        </div>
-      </div>
-      <div
-        className="rounded-xl p-5"
-        style={{
-          backgroundColor: 'rgba(255,255,255,0.10)',
-          border: '1px solid rgba(255,255,255,0.16)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
-        }}
-      >
-        <div className="text-sm mb-1" style={{ color: '#c9c9bc' }}>
-          本局流水
-        </div>
-        <div
-          className="text-3xl font-bold font-mono"
-          style={{ color: '#f2f2ea' }}
-        >
-          ¥{Number(stats.latestGameTurnover || 0).toFixed(2)}
-        </div>
-      </div>
+        {totalGames}
+      </span>
     </div>
   );
 };
