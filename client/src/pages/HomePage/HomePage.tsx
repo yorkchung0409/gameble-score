@@ -42,9 +42,9 @@ const HomePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { deviceId, currentUser, setCurrentUser } = useMahjongUser();
 
-  const gameParam = searchParams.get('game') || GAME_TEXAS;
+  const gameParam = searchParams.get('game') || GAME_MAHJONG;
   const [gameType, setGameType] = useState<string>(
-    gameParam === GAME_MAHJONG ? GAME_MAHJONG : GAME_TEXAS,
+    gameParam === GAME_TEXAS ? GAME_TEXAS : GAME_MAHJONG,
   );
 
   useEffect(() => {
@@ -67,7 +67,7 @@ const HomePage = () => {
 
   const handleGameChange = (value: string) => {
     setGameType(value);
-    setSearchParams(value === GAME_TEXAS ? {} : { game: value });
+    setSearchParams({ game: value });
   };
 
   if (!currentUser) {
@@ -88,32 +88,17 @@ const HomePage = () => {
       }}
     >
       <div className="w-full max-w-[520px]">
-        <div
-          className="text-center mb-6"
-          style={{
-            background: 'linear-gradient(135deg, #EAF4ED, #DCEEE3)',
-            borderRadius: 16,
-            padding: '22px 16px 18px',
-          }}
-        >
-          <h1
-            className="text-4xl font-bold mb-3"
-            style={{ color: '#B08D1E' }}
+        <div className="flex items-center gap-3 mb-6 px-1" style={{ minHeight: 44 }}>
+          <span
+            className="h-10 w-10 rounded-full flex items-center justify-center text-base font-bold shrink-0"
+            style={{ backgroundColor: avatarColor(currentUser.id), color: '#ffffff' }}
+            aria-hidden="true"
           >
-            牌局记账
-          </h1>
-          <div className="flex items-center justify-center gap-2">
-            <span
-              className="h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-              style={{ backgroundColor: avatarColor(currentUser.id), color: '#ffffff' }}
-              aria-hidden="true"
-            >
-              {currentUser.name.trim().charAt(0) || '?'}
-            </span>
-            <span className="text-sm font-medium" style={{ color: '#222B26' }}>
-              {currentUser.name}
-            </span>
-          </div>
+            {currentUser.name.trim().charAt(0) || '?'}
+          </span>
+          <span className="text-lg font-semibold" style={{ color: '#222B26' }}>
+            {currentUser.name}
+          </span>
         </div>
 
         <Tabs
@@ -123,18 +108,18 @@ const HomePage = () => {
         >
           <TabsList className="w-full bg-[#E8ECE6]">
             <TabsTrigger
-              value={GAME_TEXAS}
-              className="flex-1 text-base font-medium"
-              style={{ color: '#222B26' }}
-            >
-              德州
-            </TabsTrigger>
-            <TabsTrigger
               value={GAME_MAHJONG}
               className="flex-1 text-base font-medium"
               style={{ color: '#222B26' }}
             >
               麻将
+            </TabsTrigger>
+            <TabsTrigger
+              value={GAME_TEXAS}
+              className="flex-1 text-base font-medium"
+              style={{ color: '#222B26' }}
+            >
+              德州
             </TabsTrigger>
             </TabsList>
 
