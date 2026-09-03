@@ -187,10 +187,9 @@ const GameDialog = ({
 
         {/* Player rows header */}
         <div className="grid grid-cols-12 gap-2 text-sm" style={{ color: '#c9c9bc' }}>
-          <div className="col-span-3">人员</div>
-          <div className="col-span-2 text-right">买入</div>
-          <div className="col-span-2 text-right">结余</div>
-          <div className="col-span-3 text-right">净盈亏</div>
+          <div className="col-span-4">人员</div>
+          <div className="col-span-3 text-right">买入</div>
+          <div className="col-span-3 text-right">结余</div>
           <div className="col-span-2 text-center">操作</div>
         </div>
 
@@ -208,24 +207,12 @@ const GameDialog = ({
             </div>
           )}
           {rows.map((row, index) => {
-            const net =
-              row.buyIn !== '' && row.balance !== ''
-                ? Number(row.balance) - Number(row.buyIn)
-                : null;
-            const netColor =
-              net === null
-                ? '#c9c9bc'
-                : net > 0
-                  ? '#ef4444'
-                  : net < 0
-                    ? '#22c55e'
-                    : '#9ca3af';
             return (
               <div
                 key={index}
                 className="grid grid-cols-12 gap-2 items-center"
               >
-                <div className="col-span-3">
+                <div className="col-span-4">
                   <Select
                     value={row.playerId}
                     onValueChange={(v) => updateRow(index, 'playerId', v)}
@@ -248,7 +235,7 @@ const GameDialog = ({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="col-span-2 min-w-0">
+                <div className="col-span-3 min-w-0">
                   <Input
                     type="number"
                     value={row.buyIn}
@@ -258,7 +245,7 @@ const GameDialog = ({
                     style={{ color: '#f0f0e8' }}
                   />
                 </div>
-                <div className="col-span-2 min-w-0">
+                <div className="col-span-3 min-w-0">
                   <Input
                     type="number"
                     value={row.balance}
@@ -269,14 +256,6 @@ const GameDialog = ({
                     className="text-right font-mono"
                     style={{ color: '#f0f0e8' }}
                   />
-                </div>
-                <div
-                  className="col-span-3 text-right font-mono font-semibold text-sm pr-1 min-w-0 truncate"
-                  style={{ color: netColor }}
-                >
-                  {net === null
-                    ? '-'
-                    : `${net >= 0 ? '+' : ''}${net.toFixed(2)}`}
                 </div>
                 <div className="col-span-2 flex justify-center">
                   <Button
