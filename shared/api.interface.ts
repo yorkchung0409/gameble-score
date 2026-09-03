@@ -136,6 +136,7 @@ export interface MahjongRoomDetailResponse {
     mode: 'seated' | 'free';
     creatorUserId: string | null;
     createdAt: string;
+    dissolvedAt: string | null;
   };
   seats: MahjongSeat[];
   members: MahjongRoomMember[];
@@ -173,6 +174,10 @@ export interface LeaveSeatRequest {
 }
 
 export interface JoinRoomRequest {
+  userId: string;
+}
+
+export interface LeaveRoomRequest {
   userId: string;
 }
 

@@ -11,6 +11,7 @@ import { useMahjongUser } from '@client/src/hooks/useMahjongUser';
 import UserCreationOverlay from './UserCreationOverlay';
 import TexasPanel from './TexasPanel';
 import MahjongPanel from './MahjongPanel';
+import UsageGuideDialog from '@client/src/components/UsageGuideDialog';
 
 const GAME_TEXAS = 'texas';
 const GAME_MAHJONG = 'mahjong';
@@ -41,6 +42,7 @@ function avatarColor(userId: string): string {
 const HomePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { deviceId, currentUser, setCurrentUser } = useMahjongUser();
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const gameParam = searchParams.get('game') || GAME_MAHJONG;
   const [gameType, setGameType] = useState<string>(
@@ -99,6 +101,20 @@ const HomePage = () => {
           <span className="text-lg font-semibold" style={{ color: '#222B26' }}>
             {currentUser.name}
           </span>
+          <span className="flex-1" />
+          <button
+            type="button"
+            aria-label="使用说明"
+            onClick={() => setGuideOpen(true)}
+            className="h-9 w-9 rounded-full flex items-center justify-center text-base font-bold shrink-0"
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E6EAE2',
+              color: '#B08D1E',
+            }}
+          >
+            ?
+          </button>
         </div>
 
         <Tabs
@@ -132,6 +148,7 @@ const HomePage = () => {
             </TabsContent>
           </Tabs>
         </div>
+        <UsageGuideDialog open={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   );
 };

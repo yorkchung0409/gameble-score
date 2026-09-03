@@ -58,6 +58,14 @@ const MahjongRoomPage = () => {
           detail = await mahjongApi.getRoom(roomCode);
         }
         setData(detail);
+
+        // 房间已解散：提示并回到首页
+        if (detail.room.dissolvedAt) {
+          toast.info('房间已解散，已返回首页');
+          navigate('/?game=mahjong');
+          return;
+        }
+
         setError(null);
 
         if (currentUser && deviceId) {
@@ -83,7 +91,7 @@ const MahjongRoomPage = () => {
         setLoading(false);
       }
     },
-    [roomCode, currentUser],
+    [roomCode, currentUser, navigate],
   );
 
   useEffect(() => {
@@ -186,20 +194,12 @@ const MahjongRoomPage = () => {
   };
 
   const handleExitRoom = async () => {
-    if (!roomCode || !deviceId) return;
-    if (
-      !window.confirm(
-        `退出后该房间将从「最近进入」移除，确定退出「${roomCode}」吗？`,
-      )
-    ) {
+    if (!roomCode || !currentUser) return;
+    if (!window.confirm(`确定退出「${roomCode}」房间？可随时再次进入。`)) {
       return;
     }
     try {
-      await roomVisitsApi.removeVisit({
-        deviceId,
-        gameType: 'mahjong',
-        roomCode,
-      });
+      await mahjongApi.leaveRoom(roomCode, { userId: currentUser.id });
       toast.success('已退出房间');
       navigate('/?game=mahjong');
     } catch (err: unknown) {

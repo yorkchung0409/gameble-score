@@ -6,6 +6,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  OnModuleInit,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import {
@@ -20,7 +22,7 @@ import {
   mahjongTransactions,
   mahjongRoomMembers,
 } from '@server/database/schema';
-import { eq, desc, and, inArray } from 'drizzle-orm';
+import { eq, desc, and, inArray, max, isNull } from 'drizzle-orm';
 import type {
   MahjongUser,
   CreateUserResponse,
@@ -32,6 +34,10 @@ import type {
   MahjongTransaction,
   CreateTransactionRequest,
 } from '@shared/api.interface';
+
+// 自动解散：30 分钟无转账解散；扫描间隔 15 分钟
+const DISSOLVE_SCAN_INTERVAL_MS = 15 * 60 * 1000;
+const DISSOLVE_IDLE_MS = 30 * 60 * 1000;
 
 function toMahjongUser(row: typeof users.$inferSelect): MahjongUser {
   return {
@@ -50,6 +56,7 @@ function toMahjongRoom(
   mode: 'seated' | 'free';
   creatorUserId: string | null;
   createdAt: string;
+  dissolvedAt: string | null;
 } {
   return {
     id: row.id,
@@ -58,14 +65,80 @@ function toMahjongRoom(
     mode: row.mode === 'free' ? 'free' : 'seated',
     creatorUserId: row.creatorUserId ?? null,
     createdAt: row.createdAt.toISOString(),
+    dissolvedAt: row.dissolvedAt ? row.dissolvedAt.toISOString() : null,
   };
 }
 
 @Injectable()
-export class MahjongService {
+export class MahjongService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MahjongService.name);
 
+  private dissolveTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(@Inject(DRIZZLE_DB) private readonly db: DbType) {}
+
+  async onModuleInit(): Promise<void> {
+    this.dissolveTimer = setInterval(() => {
+      this.cleanupDissolvedRooms().catch((e) => {
+        this.logger.error('自动解散扫描失败', JSON.stringify(e));
+      });
+    }, DISSOLVE_SCAN_INTERVAL_MS);
+    // 启动时立即执行一次，避免首个 15 分钟窗口内堆积过期房间
+    this.cleanupDissolvedRooms().catch((e) => {
+      this.logger.error('初始自动解散扫描失败', JSON.stringify(e));
+    });
+  }
+
+  onModuleDestroy(): void {
+    if (this.dissolveTimer) {
+      clearInterval(this.dissolveTimer);
+      this.dissolveTimer = null;
+    }
+  }
+
+  /** 扫描并归档超过 30 分钟无转账的麻将房（归档：仅标记解散，数据保留） */
+  private async cleanupDissolvedRooms(): Promise<void> {
+    const now = Date.now();
+    const activeRooms = await this.db
+      .select({ id: mahjongRooms.id, createdAt: mahjongRooms.createdAt })
+      .from(mahjongRooms)
+      .where(isNull(mahjongRooms.dissolvedAt));
+    if (activeRooms.length === 0) return;
+
+    const roomIds = activeRooms.map((r) => r.id);
+    const txRows = await this.db
+      .select({
+        roomId: mahjongTransactions.roomId,
+        lastTxAt: max(mahjongTransactions.createdAt),
+      })
+      .from(mahjongTransactions)
+      .where(inArray(mahjongTransactions.roomId, roomIds))
+      .groupBy(mahjongTransactions.roomId);
+
+    const lastTxMap = new Map<string, Date>();
+    for (const r of txRows) {
+      if (r.lastTxAt) lastTxMap.set(r.roomId, new Date(r.lastTxAt));
+    }
+
+    const toDissolve: string[] = [];
+    for (const rm of activeRooms) {
+      const lastTx = lastTxMap.get(rm.id);
+      const lastActivity = lastTx
+        ? lastTx.getTime()
+        : new Date(rm.createdAt).getTime();
+      if (now - lastActivity > DISSOLVE_IDLE_MS) {
+        toDissolve.push(rm.id);
+      }
+    }
+
+    if (toDissolve.length > 0) {
+      await this.db
+        .update(mahjongRooms)
+        .set({ dissolvedAt: new Date() })
+        .where(inArray(mahjongRooms.id, toDissolve));
+      this.logger.log(`自动解散 ${toDissolve.length} 个麻将房间`);
+    }
+  }
 
   // ---------- 用户相关 ----------
 
@@ -399,11 +472,14 @@ export class MahjongService {
     }
 
     const roomRows = await this.db
-      .select({ id: mahjongRooms.id })
+      .select({ id: mahjongRooms.id, dissolvedAt: mahjongRooms.dissolvedAt })
       .from(mahjongRooms)
       .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
+    }
+    if (roomRows[0].dissolvedAt) {
+      throw new BadRequestException('房间已解散');
     }
     const roomId = roomRows[0].id;
 
@@ -458,11 +534,14 @@ export class MahjongService {
     userId: string,
   ): Promise<MahjongRoomDetailResponse> {
     const roomRows = await this.db
-      .select({ id: mahjongRooms.id })
+      .select({ id: mahjongRooms.id, dissolvedAt: mahjongRooms.dissolvedAt })
       .from(mahjongRooms)
       .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
+    }
+    if (roomRows[0].dissolvedAt) {
+      throw new BadRequestException('房间已解散');
     }
     const roomId = roomRows[0].id;
 
@@ -488,11 +567,14 @@ export class MahjongService {
     userId: string,
   ): Promise<MahjongRoomDetailResponse> {
     const roomRows = await this.db
-      .select({ id: mahjongRooms.id })
+      .select({ id: mahjongRooms.id, dissolvedAt: mahjongRooms.dissolvedAt })
       .from(mahjongRooms)
       .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
+    }
+    if (roomRows[0].dissolvedAt) {
+      throw new BadRequestException('房间已解散');
     }
     const roomId = roomRows[0].id;
 
@@ -521,11 +603,15 @@ export class MahjongService {
       .select({
         id: mahjongRooms.id,
         creatorUserId: mahjongRooms.creatorUserId,
+        dissolvedAt: mahjongRooms.dissolvedAt,
       })
       .from(mahjongRooms)
       .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
+    }
+    if (roomRows[0].dissolvedAt) {
+      throw new BadRequestException('房间已解散');
     }
     const roomRow = roomRows[0];
 
@@ -551,6 +637,38 @@ export class MahjongService {
       .update(mahjongRooms)
       .set({ mode })
       .where(eq(mahjongRooms.id, roomRow.id));
+
+    return this.getRoomDetail(roomCode);
+  }
+
+  /** 退出房间：从成员与座位移除，历史转账与余额保留（重新进入自动接上） */
+  async leaveRoom(
+    roomCode: string,
+    userId: string,
+  ): Promise<MahjongRoomDetailResponse> {
+    const roomRows = await this.db
+      .select({ id: mahjongRooms.id, dissolvedAt: mahjongRooms.dissolvedAt })
+      .from(mahjongRooms)
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
+    if (roomRows.length === 0) {
+      throw new NotFoundException('房间不存在');
+    }
+    if (roomRows[0].dissolvedAt) {
+      throw new BadRequestException('房间已解散');
+    }
+    const roomId = roomRows[0].id;
+
+    await this.db
+      .delete(mahjongSeats)
+      .where(and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, userId)));
+    await this.db
+      .delete(mahjongRoomMembers)
+      .where(
+        and(
+          eq(mahjongRoomMembers.roomId, roomId),
+          eq(mahjongRoomMembers.userId, userId),
+        ),
+      );
 
     return this.getRoomDetail(roomCode);
   }
@@ -581,11 +699,18 @@ export class MahjongService {
     }
 
     const roomRows = await this.db
-      .select({ id: mahjongRooms.id, mode: mahjongRooms.mode })
+      .select({
+        id: mahjongRooms.id,
+        mode: mahjongRooms.mode,
+        dissolvedAt: mahjongRooms.dissolvedAt,
+      })
       .from(mahjongRooms)
       .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
+    }
+    if (roomRows[0].dissolvedAt) {
+      throw new BadRequestException('房间已解散');
     }
     const roomId = roomRows[0].id;
     const roomMode = roomRows[0].mode === 'free' ? 'free' : 'seated';
@@ -684,11 +809,14 @@ export class MahjongService {
     operatorUserId: string,
   ): Promise<MahjongRoomDetailResponse> {
     const roomRows = await this.db
-      .select({ id: mahjongRooms.id })
+      .select({ id: mahjongRooms.id, dissolvedAt: mahjongRooms.dissolvedAt })
       .from(mahjongRooms)
       .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
+    }
+    if (roomRows[0].dissolvedAt) {
+      throw new BadRequestException('房间已解散');
     }
     const roomId = roomRows[0].id;
 

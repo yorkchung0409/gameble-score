@@ -16,6 +16,7 @@ import type {
   SitDownRequest,
   LeaveSeatRequest,
   JoinRoomRequest,
+  LeaveRoomRequest,
   UpdateRoomModeRequest,
   CreateTransactionRequest,
   ReverseTransactionRequest,
@@ -85,6 +86,14 @@ export class MahjongController {
     @Body() dto: JoinRoomRequest,
   ): Promise<MahjongRoomDetailResponse> {
     return this.mahjongService.joinRoom(roomCode, dto.userId);
+  }
+
+  @Post('rooms/:roomCode/leave')
+  async leaveRoom(
+    @Param('roomCode') roomCode: string,
+    @Body() dto: LeaveRoomRequest,
+  ): Promise<MahjongRoomDetailResponse> {
+    return this.mahjongService.leaveRoom(roomCode, dto.userId);
   }
 
   @Post('rooms/:roomCode/mode')

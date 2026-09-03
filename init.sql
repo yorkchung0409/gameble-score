@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS mahjong_rooms (
   name VARCHAR(200) NOT NULL DEFAULT '麻将房间',
   mode VARCHAR(20) NOT NULL DEFAULT 'seated',
   creator_user_id UUID,
-  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  dissolved_at TIMESTAMP(6)
 );
 
 CREATE TABLE IF NOT EXISTS mahjong_room_members (

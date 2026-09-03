@@ -117,6 +117,8 @@ export const mahjongRooms = pgTable(
     mode: varchar('mode', { length: 20 }).notNull().default('seated'),
     creatorUserId: uuid('creator_user_id'),
     createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    // 解散时间（自动解散归档），非空表示房间已解散
+    dissolvedAt: timestamp('dissolved_at', { precision: 6 }),
   },
   (table) => [uniqueIndex('mahjong_rooms_room_code_key').on(table.roomCode)],
 );

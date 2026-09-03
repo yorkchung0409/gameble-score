@@ -9,6 +9,7 @@ import type {
   SitDownRequest,
   LeaveSeatRequest,
   JoinRoomRequest,
+  LeaveRoomRequest,
   UpdateRoomModeRequest,
   CreateTransactionRequest,
   ReverseTransactionRequest,
@@ -81,6 +82,17 @@ export async function joinRoom(
 ): Promise<MahjongRoomDetailResponse> {
   const res = await apiClient.post<MahjongRoomDetailResponse>(
     `${ROOMS_BASE}/${roomCode}/join`,
+    data,
+  );
+  return res.data;
+}
+
+export async function leaveRoom(
+  roomCode: string,
+  data: LeaveRoomRequest,
+): Promise<MahjongRoomDetailResponse> {
+  const res = await apiClient.post<MahjongRoomDetailResponse>(
+    `${ROOMS_BASE}/${roomCode}/leave`,
     data,
   );
   return res.data;
