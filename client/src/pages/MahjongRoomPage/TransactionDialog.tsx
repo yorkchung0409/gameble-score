@@ -1,6 +1,6 @@
 import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { toast } from 'sonner';
-import { Plus, User } from 'lucide-react';
+import { User } from 'lucide-react';
 import { Button } from '@client/src/components/ui/button';
 import { Input } from '@client/src/components/ui/input';
 import {
@@ -90,14 +90,6 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, payeeOptions]);
 
-    const handleTriggerClick = () => {
-      if (!canOpen()) return;
-      setPayeeValue(getDefaultPayee());
-      setAmount('');
-      setRemark('');
-      setOpen(true);
-    };
-
     const handleSubmit = async () => {
       const amountNum = Number(amount);
       if (!amountNum || amountNum <= 0) {
@@ -127,17 +119,6 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
 
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <Button
-          className="w-full sm:w-auto font-semibold mb-6"
-          style={{
-            backgroundColor: '#d4af37',
-            color: '#07301a',
-          }}
-          onClick={handleTriggerClick}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          手动转账
-        </Button>
         <DialogContent
           style={{
             backgroundColor: '#0a3d22',

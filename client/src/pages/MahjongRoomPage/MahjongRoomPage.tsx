@@ -377,6 +377,7 @@ const MahjongRoomPage = () => {
           transactions={data.transactions}
           currentUserId={currentUserId}
           onReverse={handleReverseTransaction}
+          avatarTransferHint={isFreeMode}
         />
 
         <Dialog open={modeDialogOpen} onOpenChange={setModeDialogOpen}>

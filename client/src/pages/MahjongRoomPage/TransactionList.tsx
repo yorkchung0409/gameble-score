@@ -5,6 +5,8 @@ interface TransactionListProps {
   transactions: MahjongTransaction[];
   currentUserId: string;
   onReverse: (tx: MahjongTransaction) => void;
+  /** 免费模式：提示点击头像转账 */
+  avatarTransferHint?: boolean;
 }
 
 const formatDate = (dateStr: string): string => {
@@ -20,6 +22,7 @@ const TransactionList = ({
   transactions,
   currentUserId,
   onReverse,
+  avatarTransferHint,
 }: TransactionListProps) => {
   if (transactions.length === 0) {
     return (
@@ -31,7 +34,7 @@ const TransactionList = ({
           color: '#c9c9bc',
         }}
       >
-        还没有转账记录，点击手动转账开始记账
+        还没有转账记录，点击头像转账开始记账
       </div>
     );
   }
@@ -45,19 +48,23 @@ const TransactionList = ({
       }}
     >
       <div
-        className="px-4 py-3 text-sm font-semibold flex items-center justify-between"
+        className="px-3 py-2.5 text-sm font-semibold flex items-center justify-between"
         style={{
           color: '#f2f2ea',
           borderBottom: '1px solid rgba(0,0,0,0.25)',
         }}
       >
         <span>转账记录</span>
-        <span className="text-xs font-normal" style={{ color: '#8a8a7a' }}>
+        <span
+          className="text-xs font-normal text-right leading-tight"
+          style={{ color: '#8a8a7a' }}
+        >
+          {avatarTransferHint ? '点击头像转账 · ' : ''}
           仅能冲正自己付款的记录
         </span>
       </div>
       <div
-        className="max-h-[260px] overflow-y-auto divide-y"
+        className="max-h-[180px] overflow-y-auto divide-y"
         style={{ borderColor: 'rgba(255,255,255,0.10)' }}
       >
         {transactions.map((tx: MahjongTransaction) => {
@@ -67,12 +74,12 @@ const TransactionList = ({
           return (
             <div
               key={tx.id}
-              className="flex items-center justify-between gap-3 px-4 py-3"
+              className="flex items-center justify-between gap-3 px-3 py-2"
               style={isReversal ? { opacity: 0.75 } : undefined}
             >
               <div className="flex-1 min-w-0">
                 <div
-                  className="text-xs mb-1 flex items-center gap-1.5"
+                  className="text-[11px] mb-0.5 flex items-center gap-1.5"
                   style={{ color: '#c9c9bc' }}
                 >
                   {formatDate(tx.createdAt)}
