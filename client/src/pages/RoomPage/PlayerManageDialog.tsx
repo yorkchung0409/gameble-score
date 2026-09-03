@@ -12,6 +12,29 @@ import { Button } from '@client/src/components/ui/button';
 import { Input } from '@client/src/components/ui/input';
 import type { Player } from '@shared/api.interface';
 
+const AVATAR_COLORS = [
+  '#e8a13c',
+  '#7fb3e0',
+  '#e0706f',
+  '#6fbf8b',
+  '#9d8ad6',
+  '#4db6ac',
+  '#e57fb0',
+  '#f28d4f',
+];
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function avatarColor(id: string): string {
+  return AVATAR_COLORS[hashCode(id) % AVATAR_COLORS.length];
+}
+
 interface PlayerManageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -107,13 +130,24 @@ const PlayerManageDialog = ({
               暂无人员
             </div>
           ) : (
-            <ul>
+            <ul className="space-y-1">
               {players.map((p) => (
                 <li
                   key={p.id}
-                  className="flex items-center justify-between px-4 py-3 border-b border-[rgba(255_255_255_0.05)] last:border-0"
+                  className="flex items-center justify-between px-3 py-2 rounded-lg"
                 >
-                  <span style={{ color: '#222B26' }}>{p.name}</span>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                      style={{ backgroundColor: avatarColor(p.id), color: '#ffffff' }}
+                      aria-hidden="true"
+                    >
+                      {(p.name || '?').trim().charAt(0) || '?'}
+                    </span>
+                    <span className="truncate" style={{ color: '#222B26' }}>
+                      {p.name}
+                    </span>
+                  </span>
                   <Button
                     variant="ghost"
                     size="icon"
