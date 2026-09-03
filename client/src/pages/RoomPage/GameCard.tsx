@@ -62,7 +62,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
     >
       {/* 概要行（点击展开/折叠） */}
       <div
-        className="flex items-center justify-between gap-2 cursor-pointer select-none"
+        className="flex items-center justify-between gap-x-3 gap-y-1.5 flex-wrap cursor-pointer select-none"
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -83,7 +83,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
             {game.playerCount}人
           </span>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className="text-sm font-mono whitespace-nowrap" style={{ color: '#c9c9bc' }}>
             流水
             <span

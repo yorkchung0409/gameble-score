@@ -232,7 +232,7 @@ const RoomPage = () => {
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <div>
+            <div className="min-w-0">
             {editingName ? (
               <div className="flex items-center gap-2">
                 <Input
@@ -265,28 +265,30 @@ const RoomPage = () => {
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: '#c9c9bc' }}
-                >
-                  {gameTypeLabel} ·
-                </span>
-                <h1
-                  className="text-xl font-bold cursor-pointer hover:opacity-80"
-                  style={{ color: '#f2f2ea' }}
-                  onClick={startEditName}
-                >
-                  {data.room.roomName}
-                </h1>
-                <Pencil
-                  className="w-4 h-4 cursor-pointer"
-                  style={{ color: '#c9c9bc' }}
-                  onClick={startEditName}
-                />
+              <>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-sm font-medium shrink-0"
+                    style={{ color: '#c9c9bc' }}
+                  >
+                    {gameTypeLabel} ·
+                  </span>
+                  <h1
+                    className="text-xl font-bold cursor-pointer hover:opacity-80 truncate min-w-0"
+                    style={{ color: '#f2f2ea' }}
+                    onClick={startEditName}
+                  >
+                    {data.room.roomName}
+                  </h1>
+                  <Pencil
+                    className="w-4 h-4 cursor-pointer shrink-0"
+                    style={{ color: '#c9c9bc' }}
+                    onClick={startEditName}
+                  />
+                </div>
                 <button
                   type="button"
-                  className="flex items-center gap-1 text-sm cursor-pointer hover:opacity-70 transition-opacity ml-1"
+                  className="flex items-center gap-1 text-sm cursor-pointer hover:opacity-70 transition-opacity mt-1"
                   style={{ color: '#f2f2ea' }}
                   onClick={handleCopyRoomCode}
                   title={
@@ -301,7 +303,7 @@ const RoomPage = () => {
                   </span>
                   <Copy className="w-3.5 h-3.5" />
                 </button>
-              </div>
+              </>
             )}
             </div>
           </div>
