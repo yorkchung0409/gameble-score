@@ -1,4 +1,5 @@
 import type { MahjongRoomMember } from '@shared/api.interface';
+import TeaFeeIcon from './TeaFeeIcon';
 
 interface BalanceItem {
   userId: string;
@@ -147,11 +148,11 @@ const MemberSection = ({
         <div className="relative">
           <AvatarButton label="向茶水费转账" onClick={() => onQuickTransfer('tea_fee')}>
             <span
-              className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold shrink-0"
+              className="h-11 w-11 rounded-full flex items-center justify-center shrink-0"
               style={{ backgroundColor: '#B08D1E', color: '#ffffff' }}
               aria-hidden="true"
             >
-              ¥
+              <TeaFeeIcon size={22} />
             </span>
           </AvatarButton>
         </div>

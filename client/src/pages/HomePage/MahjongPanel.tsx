@@ -66,11 +66,6 @@ const MahjongPanel = () => {
 
   return (
     <>
-      <RecentRooms
-        deviceId={deviceId}
-        gameType="mahjong"
-        pathPrefix="/mahjong/"
-      />
     <div
       className="rounded-xl p-4 shadow-lg"
       style={{
@@ -151,6 +146,13 @@ const MahjongPanel = () => {
           </form>
         </TabsContent>
       </Tabs>
+    </div>
+    <div className="mt-4">
+      <RecentRooms
+        deviceId={deviceId}
+        gameType="mahjong"
+        pathPrefix="/mahjong/"
+      />
     </div>
     </>
   );

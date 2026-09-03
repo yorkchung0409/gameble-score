@@ -48,7 +48,7 @@ const RecentRooms = ({
     if (!emptyText) return null;
     return (
       <div
-        className="rounded-xl p-6 text-center shadow-lg mb-4"
+        className="rounded-xl p-6 text-center shadow-lg"
         style={{
           backgroundColor: '#FFFFFF',
           border: '1px solid #E6EAE2',
@@ -78,7 +78,7 @@ const RecentRooms = ({
 
   return (
     <div
-      className="rounded-xl p-4 shadow-lg mb-4"
+      className="rounded-xl p-4 shadow-lg"
       style={{
         backgroundColor: '#FFFFFF',
         border: '1px solid #E6EAE2',

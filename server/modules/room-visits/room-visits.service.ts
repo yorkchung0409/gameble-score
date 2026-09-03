@@ -80,6 +80,36 @@ export class RoomVisitsService {
     return { visit: toRoomVisitRecord(inserted) };
   }
 
+  async removeVisit(dto: {
+    deviceId: string;
+    gameType: string;
+    roomCode: string;
+  }): Promise<{ removed: boolean }> {
+    if (!dto.deviceId || dto.deviceId.trim().length === 0) {
+      throw new BadRequestException('deviceId 不能为空');
+    }
+    if (!dto.gameType || dto.gameType.trim().length === 0) {
+      throw new BadRequestException('gameType 不能为空');
+    }
+    if (!dto.roomCode || dto.roomCode.trim().length === 0) {
+      throw new BadRequestException('roomCode 不能为空');
+    }
+    const rows = await this.db
+      .select({ id: userRoomVisits.id })
+      .from(userRoomVisits)
+      .where(
+        and(
+          eq(userRoomVisits.deviceId, dto.deviceId),
+          eq(userRoomVisits.gameType, dto.gameType),
+          eq(userRoomVisits.roomCode, dto.roomCode),
+        ),
+      );
+    if (rows.length > 0) {
+      await this.db.delete(userRoomVisits).where(eq(userRoomVisits.id, rows[0].id));
+    }
+    return { removed: rows.length > 0 };
+  }
+
   async getVisits(
     deviceId: string,
     gameType: string,

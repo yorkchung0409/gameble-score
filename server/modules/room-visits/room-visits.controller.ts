@@ -2,12 +2,14 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Query,
 } from '@nestjs/common';
 import { RoomVisitsService } from './room-visits.service';
 import type {
   RecordRoomVisitRequest,
+  RemoveRoomVisitRequest,
   GetRoomVisitsResponse,
   RoomVisitRecord,
 } from '@shared/api.interface';
@@ -21,6 +23,13 @@ export class RoomVisitsController {
     @Body() dto: RecordRoomVisitRequest,
   ): Promise<{ visit: RoomVisitRecord }> {
     return this.roomVisitsService.recordVisit(dto);
+  }
+
+  @Delete()
+  async removeVisit(
+    @Body() dto: RemoveRoomVisitRequest,
+  ): Promise<{ removed: boolean }> {
+    return this.roomVisitsService.removeVisit(dto);
   }
 
   @Get()

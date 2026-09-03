@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type {
   RecordRoomVisitRequest,
+  RemoveRoomVisitRequest,
   GetRoomVisitsResponse,
   RoomVisitRecord,
 } from '@shared/api.interface';
@@ -11,6 +12,13 @@ export async function recordVisit(
   data: RecordRoomVisitRequest,
 ): Promise<{ visit: RoomVisitRecord }> {
   const res = await apiClient.post<{ visit: RoomVisitRecord }>(BASE, data);
+  return res.data;
+}
+
+export async function removeVisit(
+  data: RemoveRoomVisitRequest,
+): Promise<{ removed: boolean }> {
+  const res = await apiClient.delete<{ removed: boolean }>(BASE, { data });
   return res.data;
 }
 

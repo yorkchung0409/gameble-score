@@ -48,12 +48,6 @@ const TexasPanel = ({ gameType }: TexasPanelProps) => {
 
   return (
     <>
-      <RecentRooms
-        deviceId={deviceId}
-        gameType="texas"
-        pathPrefix="/room/"
-        emptyText="还没有账本，先新建一个吧"
-      />
       <div
         className="rounded-xl p-6 shadow-lg"
         style={{
@@ -90,6 +84,14 @@ const TexasPanel = ({ gameType }: TexasPanelProps) => {
             {creating ? '创建中...' : '＋ 新建账本'}
           </Button>
         </form>
+      </div>
+      <div className="mt-4">
+        <RecentRooms
+          deviceId={deviceId}
+          gameType="texas"
+          pathPrefix="/room/"
+          emptyText="还没有账本，先新建一个吧"
+        />
       </div>
     </>
   );

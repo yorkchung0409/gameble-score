@@ -185,6 +185,28 @@ const MahjongRoomPage = () => {
     }
   };
 
+  const handleExitRoom = async () => {
+    if (!roomCode || !deviceId) return;
+    if (
+      !window.confirm(
+        `退出后该房间将从「最近进入」移除，确定退出「${roomCode}」吗？`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await roomVisitsApi.removeVisit({
+        deviceId,
+        gameType: 'mahjong',
+        roomCode,
+      });
+      toast.success('已退出房间');
+      navigate('/?game=mahjong');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '退出失败');
+    }
+  };
+
   const handleSubmitTransaction = async (
     payload: CreateTransactionRequest,
   ) => {
@@ -319,6 +341,14 @@ const MahjongRoomPage = () => {
               </div>
             </div>
           </div>
+          <button
+            type="button"
+            className="text-xs shrink-0 transition-opacity hover:opacity-70"
+            style={{ color: '#6B7A70' }}
+            onClick={handleExitRoom}
+          >
+            退出房间
+          </button>
         </div>
 
         {isFreeMode ? (

@@ -1,6 +1,6 @@
 import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { toast } from 'sonner';
-import { User } from 'lucide-react';
+import { ArrowRight, ChevronDown } from 'lucide-react';
 import { Button } from '@client/src/components/ui/button';
 import { Input } from '@client/src/components/ui/input';
 import {
@@ -8,15 +8,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@client/src/components/ui/dialog';
 import {
   Select,
   SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
 } from '@client/src/components/ui/select';
+import TeaFeeIcon from './TeaFeeIcon';
 import type { CreateTransactionRequest } from '@shared/api.interface';
 
 export interface PayeeOption {
@@ -36,6 +35,30 @@ interface TransactionDialogProps {
   blockedMessage?: string;
   onSubmit: (payload: CreateTransactionRequest) => Promise<void>;
   submitting: boolean;
+}
+
+// 确定性头像配色：与成员区一致
+const AVATAR_COLORS = [
+  '#e8a13c',
+  '#7fb3e0',
+  '#e0706f',
+  '#6fbf8b',
+  '#9d8ad6',
+  '#4db6ac',
+  '#e57fb0',
+  '#f28d4f',
+];
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function avatarColor(userId: string): string {
+  return AVATAR_COLORS[hashCode(userId) % AVATAR_COLORS.length];
 }
 
 const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogProps>(
@@ -117,6 +140,12 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
       setOpen(false);
     };
 
+    const isTeaFee = payeeValue === 'tea_fee';
+    const payeeName = isTeaFee
+      ? '茶水费'
+      : (payeeOptions.find((o) => o.id === payeeValue)?.name ?? '收款方');
+    const myInitial = (currentUserName || '?').trim().charAt(0);
+
     return (
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
@@ -127,40 +156,71 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
           }}
         >
           <DialogHeader>
-            <DialogTitle style={{ color: '#222B26' }}>
-              手动转账
+            <DialogTitle
+              style={{ color: '#222B26', textAlign: 'center', fontSize: 18 }}
+            >
+              转账给{payeeName}
             </DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-4 py-2">
-            <div>
-              <label
-                className="block text-sm mb-1.5"
-                style={{ color: '#6B7A70' }}
+
+          {/* 付款方 → 收款方 一行（参考布局） */}
+          <div className="flex items-center justify-center gap-3 py-2">
+            <div className="flex flex-col items-center gap-1">
+              <span
+                className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold shrink-0"
+                style={{ backgroundColor: avatarColor(currentUserId), color: '#ffffff' }}
+                aria-hidden="true"
               >
-                付款方
-              </label>
-              <div
-                className="flex items-center gap-2 px-3 py-2 rounded-md font-semibold"
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  border: '1px solid #E6EAE2',
-                  color: '#222B26',
-                }}
-              >
-                <User className="w-4 h-4" />
+                {myInitial}
+              </span>
+              <span className="text-xs" style={{ color: '#222B26' }}>
                 {currentUserName ? `${currentUserName}（我）` : '--'}
-              </div>
+              </span>
             </div>
-            <div>
-              <label
-                className="block text-sm mb-1.5"
-                style={{ color: '#6B7A70' }}
-              >
-                收款方
-              </label>
+
+            <div className="flex flex-col items-center gap-0.5 px-1">
+              <ArrowRight className="w-5 h-5" style={{ color: '#6B7A70' }} />
+              <span className="text-[10px]" style={{ color: '#6B7A70' }}>
+                转账
+              </span>
+            </div>
+
+            {/* 收款方：可点击切换 */}
+            <div className="flex flex-col items-center gap-1">
               <Select value={payeeValue} onValueChange={setPayeeValue}>
-                <SelectTrigger style={{ color: '#222B26' }}>
-                  <SelectValue placeholder="选择收款方" />
+                <SelectTrigger
+                  className="flex flex-col items-center gap-1 border-0 bg-transparent w-auto"
+                  style={{
+                    color: '#222B26',
+                    height: 'auto',
+                    padding: 0,
+                    boxShadow: 'none',
+                  }}
+                >
+                  {isTeaFee ? (
+                    <span
+                      className="h-11 w-11 rounded-full flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: '#B08D1E', color: '#ffffff' }}
+                      aria-hidden="true"
+                    >
+                      <TeaFeeIcon size={22} />
+                    </span>
+                  ) : (
+                    <span
+                      className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold shrink-0"
+                      style={{ backgroundColor: avatarColor(payeeValue), color: '#ffffff' }}
+                      aria-hidden="true"
+                    >
+                      {(payeeName || '?').trim().charAt(0)}
+                    </span>
+                  )}
+                  <span
+                    className="text-xs flex items-center gap-0.5"
+                    style={{ color: '#222B26' }}
+                  >
+                    {payeeName}
+                    <ChevronDown className="w-3 h-3" style={{ color: '#6B7A70' }} />
+                  </span>
                 </SelectTrigger>
                 <SelectContent
                   style={{
@@ -184,61 +244,38 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label
-                className="block text-sm mb-1.5"
-                style={{ color: '#6B7A70' }}
-              >
-                金额
-              </label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="请输入金额"
-                style={{ color: '#222B26' }}
-              />
-            </div>
-            <div>
-              <label
-                className="block text-sm mb-1.5"
-                style={{ color: '#6B7A70' }}
-              >
-                备注（选填）
-              </label>
-              <Input
-                type="text"
-                value={remark}
-                onChange={(e) => setRemark(e.target.value)}
-                placeholder="请输入备注"
-                style={{ color: '#222B26' }}
-              />
-            </div>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpen(false)}
-              style={{
-                color: '#222B26',
-                borderColor: '#DCE3DC',
-              }}
-            >
-              取消
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting}
-              style={{
-                backgroundColor: '#1E7A46',
-                color: '#ffffff',
-              }}
-            >
-              {submitting ? '提交中...' : '确认转账'}
-            </Button>
-          </DialogFooter>
+
+          <div className="flex flex-col gap-3">
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="输入金额"
+              style={{ color: '#222B26', textAlign: 'center' }}
+            />
+            <Input
+              type="text"
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+              placeholder="备注（选填）"
+              style={{ color: '#222B26' }}
+            />
+          </div>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="w-full font-semibold mt-3"
+            style={{
+              backgroundColor: '#1E7A46',
+              color: '#ffffff',
+            }}
+          >
+            {submitting ? '提交中...' : '确认转账'}
+          </Button>
         </DialogContent>
       </Dialog>
     );

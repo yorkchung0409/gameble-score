@@ -215,3 +215,9 @@ export interface RecordRoomVisitRequest {
   roomCode: string;
   roomName: string;
 }
+
+export interface RemoveRoomVisitRequest {
+  deviceId: string;
+  gameType: string;
+  roomCode: string;
+}
