@@ -278,12 +278,6 @@ const MahjongRoomPage = () => {
             </Button>
             <div>
               <div className="flex items-center gap-2">
-                <h1
-                  className="text-xl font-bold"
-                  style={{ color: '#222B26' }}
-                >
-                  麻将
-                </h1>
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded"
                   style={{
