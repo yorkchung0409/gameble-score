@@ -39,18 +39,18 @@ const SeatSection = ({
             key={idx}
             className="rounded-xl p-2.5 flex flex-col items-center relative"
             style={{
-              backgroundColor: 'rgba(255,255,255,0.10)',
+              backgroundColor: '#FFFFFF',
               border: isMe
-                ? '2px solid #d4af37'
-                : '1px solid rgba(255,255,255,0.16)',
+                ? '2px solid #1E7A46'
+                : '1px solid #E6EAE2',
               boxShadow: isMe
-                ? '0 4px 20px rgba(255,255,255,0.16)'
-                : '0 4px 20px rgba(0,0,0,0.25)',
+                ? '0 4px 20px rgba(30,122,70,0.28)'
+                : '0 2px 12px rgba(30,40,34,0.08)',
             }}
           >
             <div
               className="text-[10px] mb-1.5 font-medium"
-              style={{ color: '#c9c9bc' }}
+              style={{ color: '#6B7A70' }}
             >
               {SEAT_NAMES[idx]}
             </div>
@@ -58,14 +58,14 @@ const SeatSection = ({
               <>
                 <div
                   className="text-sm font-semibold mb-2 text-center truncate w-full"
-                  style={{ color: '#f0f0e8' }}
+                  style={{ color: '#222B26' }}
                   title={seat.userName}
                 >
                   {seat.userName}
                   {isMe && (
                     <span
                       className="text-[10px] ml-0.5"
-                      style={{ color: '#d4af37' }}
+                      style={{ color: '#B08D1E' }}
                     >
                       （我）
                     </span>
@@ -77,8 +77,8 @@ const SeatSection = ({
                     size="icon"
                     className="h-7 w-7 [&_svg]:size-3.5"
                     style={{
-                      color: '#ef4444',
-                      borderColor: 'rgba(239,68,68,0.4)',
+                      color: '#E5484D',
+                      borderColor: 'rgba(229,72,77,0.4)',
                     }}
                     onClick={onLeaveSeat}
                     aria-label="离开座位"
@@ -91,8 +91,8 @@ const SeatSection = ({
                     size="icon"
                     className="h-7 w-7 [&_svg]:size-3.5"
                     style={{
-                      color: '#d4af37',
-                      borderColor: 'rgba(212,175,55,0.4)',
+                      color: '#B08D1E',
+                      borderColor: 'rgba(176,141,30,0.4)',
                     }}
                     onClick={() => onQuickTransfer(seat.userId)}
                     aria-label="转账"
@@ -115,7 +115,7 @@ const SeatSection = ({
               <>
                 <div
                   className="text-sm mb-2"
-                  style={{ color: '#c9c9bc' }}
+                  style={{ color: '#6B7A70' }}
                 >
                   空位
                 </div>
@@ -123,8 +123,8 @@ const SeatSection = ({
                   size="icon"
                   className="h-7 w-7 [&_svg]:size-3.5"
                   style={{
-                    backgroundColor: '#d4af37',
-                    color: '#07301a',
+                    backgroundColor: '#1E7A46',
+                    color: '#ffffff',
                   }}
                   onClick={() => onSitDown(idx)}
                   disabled={!canInteract}

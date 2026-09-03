@@ -142,12 +142,12 @@ const GameDialog = ({
         className="max-w-2xl max-h-[90vh] overflow-y-auto"
         style={{
           backgroundColor: '#0a3d22',
-          border: '1px solid rgba(255,255,255,0.16)',
-          color: '#f0f0e8',
+          border: '1px solid #E6EAE2',
+          color: '#222B26',
         }}
       >
         <DialogHeader>
-          <DialogTitle style={{ color: '#f2f2ea' }}>
+          <DialogTitle style={{ color: '#222B26' }}>
             {isEdit ? '编辑牌局' : '添加牌局'}
           </DialogTitle>
         </DialogHeader>
@@ -156,7 +156,7 @@ const GameDialog = ({
         <div>
           <label
             className="block text-sm mb-1.5"
-            style={{ color: '#c9c9bc' }}
+            style={{ color: '#6B7A70' }}
           >
             日期
           </label>
@@ -166,8 +166,8 @@ const GameDialog = ({
                 variant="outline"
                 className="w-full justify-start text-left font-normal"
                 style={{
-                  color: '#f0f0e8',
-                  borderColor: 'rgba(255,255,255,0.16)',
+                  color: '#222B26',
+                  borderColor: '#E6EAE2',
                 }}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
@@ -186,7 +186,7 @@ const GameDialog = ({
         </div>
 
         {/* Player rows header */}
-        <div className="grid grid-cols-12 gap-2 text-sm" style={{ color: '#c9c9bc' }}>
+        <div className="grid grid-cols-12 gap-2 text-sm" style={{ color: '#6B7A70' }}>
           <div className="col-span-4">人员</div>
           <div className="col-span-3 text-right">买入</div>
           <div className="col-span-3 text-right">结余</div>
@@ -199,8 +199,8 @@ const GameDialog = ({
             <div
               className="text-center py-6 rounded-lg"
               style={{
-                backgroundColor: 'rgba(255,255,255,0.04)',
-                color: '#c9c9bc',
+                backgroundColor: '#F7F9F5',
+                color: '#6B7A70',
               }}
             >
               还没有人员，点击下方「添加人员」按钮
@@ -217,7 +217,7 @@ const GameDialog = ({
                     value={row.playerId}
                     onValueChange={(v) => updateRow(index, 'playerId', v)}
                   >
-                    <SelectTrigger className="w-full" style={{ color: '#f0f0e8' }}>
+                    <SelectTrigger className="w-full" style={{ color: '#222B26' }}>
                       <SelectValue placeholder="选择人员" />
                     </SelectTrigger>
                     <SelectContent>
@@ -242,7 +242,7 @@ const GameDialog = ({
                     onChange={(e) => updateRow(index, 'buyIn', e.target.value)}
                     placeholder="0"
                     className="text-right tabular-nums"
-                    style={{ color: '#f0f0e8' }}
+                    style={{ color: '#222B26' }}
                   />
                 </div>
                 <div className="col-span-3 min-w-0">
@@ -254,14 +254,14 @@ const GameDialog = ({
                     }
                     placeholder="0"
                     className="text-right tabular-nums"
-                    style={{ color: '#f0f0e8' }}
+                    style={{ color: '#222B26' }}
                   />
                 </div>
                 <div className="col-span-2 flex justify-center">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 text-[#c9c9bc] hover:text-red-400"
+                    className="h-9 w-9 text-[#6B7A70] hover:text-[#E5484D]"
                     onClick={() => removeRow(index)}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -277,8 +277,8 @@ const GameDialog = ({
           onClick={addRow}
           disabled={players.length === 0}
           style={{
-            color: '#f2f2ea',
-            borderColor: 'rgba(255,255,255,0.16)',
+            color: '#222B26',
+            borderColor: '#E6EAE2',
           }}
         >
           <Plus className="w-4 h-4" />
@@ -290,8 +290,8 @@ const GameDialog = ({
             variant="outline"
             onClick={() => onOpenChange(false)}
             style={{
-              color: '#f0f0e8',
-              borderColor: 'rgba(255,255,255,0.16)',
+              color: '#222B26',
+              borderColor: '#E6EAE2',
             }}
           >
             取消
@@ -300,8 +300,8 @@ const GameDialog = ({
             onClick={handleSubmit}
             disabled={submitting}
             style={{
-              backgroundColor: '#d4af37',
-              color: '#07301a',
+              backgroundColor: '#1E7A46',
+              color: '#ffffff',
             }}
           >
             {submitting ? '保存中...' : '保存'}

@@ -57,16 +57,16 @@ const TexasPanel = ({ gameType }: TexasPanelProps) => {
       <div
         className="rounded-xl p-6 shadow-lg"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.10)',
-          border: '1px solid rgba(255,255,255,0.16)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E6EAE2',
+          boxShadow: '0 2px 12px rgba(30,40,34,0.08)',
         }}
       >
         <form onSubmit={handleCreate} className="flex flex-col gap-4">
           <div>
             <label
               className="block text-sm mb-1.5"
-              style={{ color: '#c9c9bc' }}
+              style={{ color: '#6B7A70' }}
             >
               账本名称
             </label>
@@ -75,7 +75,7 @@ const TexasPanel = ({ gameType }: TexasPanelProps) => {
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
               placeholder="例如：家里局 / 公司局 / 老家局"
-              style={{ color: '#f0f0e8' }}
+              style={{ color: '#222B26' }}
             />
           </div>
           <Button
@@ -83,8 +83,8 @@ const TexasPanel = ({ gameType }: TexasPanelProps) => {
             disabled={creating}
             className="w-full font-semibold mt-2"
             style={{
-              backgroundColor: '#d4af37',
-              color: '#07301a',
+              backgroundColor: '#1E7A46',
+              color: '#ffffff',
             }}
           >
             {creating ? '创建中...' : '＋ 新建账本'}

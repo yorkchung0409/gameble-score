@@ -56,25 +56,25 @@ const UserCreationOverlay = ({
     <div
       className="min-h-screen w-full flex items-center justify-center px-5"
       style={{
-        background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
+        background: '#F4F6F1',
       }}
     >
       <div
         className="w-full max-w-md rounded-xl p-8 shadow-lg"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.10)',
-          border: '1px solid rgba(255,255,255,0.16)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E6EAE2',
+          boxShadow: '0 2px 12px rgba(30,40,34,0.08)',
         }}
       >
         <div className="text-center mb-8">
           <h2
             className="text-3xl font-bold mb-3"
-            style={{ color: '#e8c96a' }}
+            style={{ color: '#B08D1E' }}
           >
             创建你的身份
           </h2>
-          <p style={{ color: '#c9c9bc' }}>
+          <p style={{ color: '#6B7A70' }}>
             输入你的名字，在所有牌局中使用
           </p>
         </div>
@@ -82,7 +82,7 @@ const UserCreationOverlay = ({
           <div>
             <label
               className="block text-sm mb-2"
-              style={{ color: '#c9c9bc' }}
+              style={{ color: '#6B7A70' }}
             >
               姓名
             </label>
@@ -91,7 +91,7 @@ const UserCreationOverlay = ({
               value={userNameInput}
               onChange={(e) => setUserNameInput(e.target.value)}
               placeholder="请输入你的名字"
-              style={{ color: '#f0f0e8' }}
+              style={{ color: '#222B26' }}
             />
           </div>
           <Button
@@ -99,8 +99,8 @@ const UserCreationOverlay = ({
             disabled={creating}
             className="w-full font-semibold mt-2"
             style={{
-              backgroundColor: '#d4af37',
-              color: '#07301a',
+              backgroundColor: '#1E7A46',
+              color: '#ffffff',
             }}
           >
             {creating ? '创建中...' : '开始使用'}

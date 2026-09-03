@@ -108,7 +108,7 @@ const MemberSection = ({
               {isMe && (
                 <span
                   className="absolute -top-1.5 -right-1.5 text-[9px] px-1 py-px rounded-full font-bold"
-                  style={{ backgroundColor: '#d4af37', color: '#07301a' }}
+                  style={{ backgroundColor: '#1E7A46', color: '#ffffff' }}
                 >
                   我
                 </span>
@@ -116,12 +116,12 @@ const MemberSection = ({
             </div>
             <span
               className="text-[11px] w-full text-center truncate"
-              style={{ color: '#f0f0e8' }}
+              style={{ color: '#222B26' }}
               title={m.userName}
             >
               {m.userName}
             </span>
-            <span className="text-xs font-medium" style={{ color: '#c9c9bc' }}>
+            <span className="text-xs font-medium" style={{ color: '#6B7A70' }}>
               {fmtBalance(bal ? bal.balance : '0')}
             </span>
           </div>
@@ -134,17 +134,17 @@ const MemberSection = ({
           <AvatarButton label="向茶水费转账" onClick={() => onQuickTransfer('tea_fee')}>
             <span
               className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold shrink-0"
-              style={{ backgroundColor: '#d4af37', color: '#07301a' }}
+              style={{ backgroundColor: '#B08D1E', color: '#ffffff' }}
               aria-hidden="true"
             >
               ¥
             </span>
           </AvatarButton>
         </div>
-        <span className="text-[11px] w-full text-center truncate" style={{ color: '#e8c96a' }}>
+        <span className="text-[11px] w-full text-center truncate" style={{ color: '#B08D1E' }}>
           茶水费
         </span>
-        <span className="text-xs font-medium" style={{ color: '#e8c96a' }}>
+        <span className="text-xs font-medium" style={{ color: '#B08D1E' }}>
           {fmtBalance(teaFeeTotal)}
         </span>
       </div>

@@ -122,12 +122,12 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
         <DialogContent
           style={{
             backgroundColor: '#0a3d22',
-            border: '1px solid rgba(255,255,255,0.16)',
-            color: '#f0f0e8',
+            border: '1px solid #E6EAE2',
+            color: '#222B26',
           }}
         >
           <DialogHeader>
-            <DialogTitle style={{ color: '#f2f2ea' }}>
+            <DialogTitle style={{ color: '#222B26' }}>
               手动转账
             </DialogTitle>
           </DialogHeader>
@@ -135,16 +135,16 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#c9c9bc' }}
+                style={{ color: '#6B7A70' }}
               >
                 付款方
               </label>
               <div
                 className="flex items-center gap-2 px-3 py-2 rounded-md font-semibold"
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.10)',
-                  border: '1px solid rgba(255,255,255,0.16)',
-                  color: '#f2f2ea',
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E6EAE2',
+                  color: '#222B26',
                 }}
               >
                 <User className="w-4 h-4" />
@@ -154,31 +154,31 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#c9c9bc' }}
+                style={{ color: '#6B7A70' }}
               >
                 收款方
               </label>
               <Select value={payeeValue} onValueChange={setPayeeValue}>
-                <SelectTrigger style={{ color: '#f0f0e8' }}>
+                <SelectTrigger style={{ color: '#222B26' }}>
                   <SelectValue placeholder="选择收款方" />
                 </SelectTrigger>
                 <SelectContent
                   style={{
                     backgroundColor: '#0a3d22',
-                    border: '1px solid rgba(255,255,255,0.16)',
-                    color: '#f0f0e8',
+                    border: '1px solid #E6EAE2',
+                    color: '#222B26',
                   }}
                 >
                   {payeeOptions.map((o) => (
                     <SelectItem
                       key={o.id}
                       value={o.id}
-                      style={{ color: '#f0f0e8' }}
+                      style={{ color: '#222B26' }}
                     >
                       {o.name}
                     </SelectItem>
                   ))}
-                  <SelectItem value="tea_fee" style={{ color: '#f0f0e8' }}>
+                  <SelectItem value="tea_fee" style={{ color: '#222B26' }}>
                     茶水费
                   </SelectItem>
                 </SelectContent>
@@ -187,7 +187,7 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#c9c9bc' }}
+                style={{ color: '#6B7A70' }}
               >
                 金额
               </label>
@@ -198,13 +198,13 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="请输入金额"
-                style={{ color: '#f0f0e8' }}
+                style={{ color: '#222B26' }}
               />
             </div>
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#c9c9bc' }}
+                style={{ color: '#6B7A70' }}
               >
                 备注（选填）
               </label>
@@ -213,7 +213,7 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
                 value={remark}
                 onChange={(e) => setRemark(e.target.value)}
                 placeholder="请输入备注"
-                style={{ color: '#f0f0e8' }}
+                style={{ color: '#222B26' }}
               />
             </div>
           </div>
@@ -222,8 +222,8 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
               variant="outline"
               onClick={() => setOpen(false)}
               style={{
-                color: '#f0f0e8',
-                borderColor: 'rgba(255,255,255,0.2)',
+                color: '#222B26',
+                borderColor: '#DCE3DC',
               }}
             >
               取消
@@ -232,8 +232,8 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
               onClick={handleSubmit}
               disabled={submitting}
               style={{
-                backgroundColor: '#d4af37',
-                color: '#07301a',
+                backgroundColor: '#1E7A46',
+                color: '#ffffff',
               }}
             >
               {submitting ? '提交中...' : '确认转账'}

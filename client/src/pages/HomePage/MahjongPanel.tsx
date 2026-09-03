@@ -79,17 +79,17 @@ const MahjongPanel = () => {
     <div
       className="rounded-xl p-6 shadow-lg"
       style={{
-        backgroundColor: 'rgba(255,255,255,0.10)',
-        border: '1px solid rgba(255,255,255,0.16)',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E6EAE2',
+        boxShadow: '0 2px 12px rgba(30,40,34,0.08)',
       }}
     >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full mb-6 bg-black/20">
-          <TabsTrigger value="create" className="flex-1 text-[#f0f0e8]">
+        <TabsList className="w-full mb-6 bg-[#E8ECE6]">
+          <TabsTrigger value="create" className="flex-1 text-[#222B26]">
             创建房间
           </TabsTrigger>
-          <TabsTrigger value="join" className="flex-1 text-[#f0f0e8]">
+          <TabsTrigger value="join" className="flex-1 text-[#222B26]">
             加入房间
           </TabsTrigger>
         </TabsList>
@@ -99,7 +99,7 @@ const MahjongPanel = () => {
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#c9c9bc' }}
+                style={{ color: '#6B7A70' }}
               >
                 房间名称
               </label>
@@ -108,13 +108,13 @@ const MahjongPanel = () => {
                 value={roomName}
                 onChange={(e) => setRoomName(e.target.value)}
                 placeholder="请输入房间名称"
-                style={{ color: '#f0f0e8' }}
+                style={{ color: '#222B26' }}
               />
             </div>
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#c9c9bc' }}
+                style={{ color: '#6B7A70' }}
               >
                 房间码（选填，留空自动生成）
               </label>
@@ -123,7 +123,7 @@ const MahjongPanel = () => {
                 value={roomCodeInput}
                 onChange={(e) => setRoomCodeInput(e.target.value)}
                 placeholder="自定义房间码"
-                style={{ color: '#f0f0e8' }}
+                style={{ color: '#222B26' }}
               />
             </div>
             <Button
@@ -131,8 +131,8 @@ const MahjongPanel = () => {
               disabled={creating}
               className="w-full font-semibold mt-2"
               style={{
-                backgroundColor: '#d4af37',
-                color: '#07301a',
+                backgroundColor: '#1E7A46',
+                color: '#ffffff',
               }}
             >
               {creating ? '创建中...' : '创建房间'}
@@ -145,7 +145,7 @@ const MahjongPanel = () => {
             <div>
               <label
                 className="block text-sm mb-1.5"
-                style={{ color: '#c9c9bc' }}
+                style={{ color: '#6B7A70' }}
               >
                 房间码
               </label>
@@ -154,7 +154,7 @@ const MahjongPanel = () => {
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="请输入房间码"
-                style={{ color: '#f0f0e8' }}
+                style={{ color: '#222B26' }}
               />
             </div>
             <Button
@@ -162,8 +162,8 @@ const MahjongPanel = () => {
               disabled={joining}
               className="w-full font-semibold mt-2"
               style={{
-                backgroundColor: '#d4af37',
-                color: '#07301a',
+                backgroundColor: '#1E7A46',
+                color: '#ffffff',
               }}
             >
               {joining ? '加入中...' : '加入房间'}

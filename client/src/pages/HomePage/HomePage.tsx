@@ -61,23 +61,23 @@ const HomePage = () => {
     <div
       className="min-h-screen w-full flex items-center justify-center px-5 py-6"
       style={{
-        background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
+        background: '#F4F6F1',
       }}
     >
       <div className="w-full max-w-[520px]">
         <div className="text-center mb-6">
           <h1
             className="text-4xl font-bold mb-2"
-            style={{ color: '#e8c96a' }}
+            style={{ color: '#B08D1E' }}
           >
             牌局记账
           </h1>
-          <p style={{ color: '#c9c9bc' }}>
+          <p style={{ color: '#6B7A70' }}>
             多人云端协作，实时同步牌局数据
           </p>
           <p
             className="text-sm mt-2"
-            style={{ color: '#c9c9bc' }}
+            style={{ color: '#6B7A70' }}
           >
             你是：{currentUser.name}
           </p>
@@ -88,18 +88,18 @@ const HomePage = () => {
           onValueChange={handleGameChange}
           className="mb-5"
         >
-          <TabsList className="w-full bg-black/20">
+          <TabsList className="w-full bg-[#E8ECE6]">
             <TabsTrigger
               value={GAME_TEXAS}
               className="flex-1 text-base font-medium"
-              style={{ color: '#f0f0e8' }}
+              style={{ color: '#222B26' }}
             >
               德州
             </TabsTrigger>
             <TabsTrigger
               value={GAME_MAHJONG}
               className="flex-1 text-base font-medium"
-              style={{ color: '#f0f0e8' }}
+              style={{ color: '#222B26' }}
             >
               麻将
             </TabsTrigger>

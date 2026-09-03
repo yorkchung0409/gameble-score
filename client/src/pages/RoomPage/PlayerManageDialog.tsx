@@ -67,12 +67,12 @@ const PlayerManageDialog = ({
         className="max-w-md"
         style={{
           backgroundColor: '#0a3d22',
-          border: '1px solid rgba(255,255,255,0.16)',
-          color: '#f0f0e8',
+          border: '1px solid #E6EAE2',
+          color: '#222B26',
         }}
       >
         <DialogHeader>
-          <DialogTitle style={{ color: '#f2f2ea' }}>人员管理</DialogTitle>
+          <DialogTitle style={{ color: '#222B26' }}>人员管理</DialogTitle>
         </DialogHeader>
 
         <div className="flex gap-2">
@@ -83,14 +83,14 @@ const PlayerManageDialog = ({
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleAdd();
             }}
-            style={{ color: '#f0f0e8' }}
+            style={{ color: '#222B26' }}
           />
           <Button
             onClick={handleAdd}
             disabled={submitting}
             style={{
-              backgroundColor: '#d4af37',
-              color: '#07301a',
+              backgroundColor: '#1E7A46',
+              color: '#ffffff',
             }}
           >
             <Plus className="w-4 h-4" />
@@ -100,10 +100,10 @@ const PlayerManageDialog = ({
 
         <div
           className="max-h-80 overflow-y-auto rounded-lg"
-          style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
+          style={{ backgroundColor: '#F7F9F5' }}
         >
           {players.length === 0 ? (
-            <div className="text-center py-8" style={{ color: '#c9c9bc' }}>
+            <div className="text-center py-8" style={{ color: '#6B7A70' }}>
               暂无人员
             </div>
           ) : (
@@ -113,11 +113,11 @@ const PlayerManageDialog = ({
                   key={p.id}
                   className="flex items-center justify-between px-4 py-3 border-b border-[rgba(255_255_255_0.05)] last:border-0"
                 >
-                  <span style={{ color: '#f0f0e8' }}>{p.name}</span>
+                  <span style={{ color: '#222B26' }}>{p.name}</span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-[#c9c9bc] hover:text-red-400"
+                    className="h-8 w-8 text-[#6B7A70] hover:text-[#E5484D]"
                     disabled={deletingId === p.id}
                     onClick={() => handleDelete(p.id, p.name)}
                   >
@@ -133,7 +133,7 @@ const PlayerManageDialog = ({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            style={{ color: '#f0f0e8', borderColor: 'rgba(255,255,255,0.16)' }}
+            style={{ color: '#222B26', borderColor: '#E6EAE2' }}
           >
             关闭
           </Button>

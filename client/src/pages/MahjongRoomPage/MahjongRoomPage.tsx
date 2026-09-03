@@ -206,8 +206,8 @@ const MahjongRoomPage = () => {
       <div
         className="min-h-screen w-full flex items-center justify-center"
         style={{
-          background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
-          color: '#f0f0e8',
+          background: '#F4F6F1',
+          color: '#222B26',
         }}
       >
         加载中...
@@ -220,8 +220,8 @@ const MahjongRoomPage = () => {
       <div
         className="min-h-screen w-full flex items-center justify-center"
         style={{
-          background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
-          color: '#f0f0e8',
+          background: '#F4F6F1',
+          color: '#222B26',
         }}
       >
         <div className="text-center">
@@ -258,7 +258,7 @@ const MahjongRoomPage = () => {
     <div
       className="min-h-screen w-full"
       style={{
-        background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
+        background: '#F4F6F1',
       }}
     >
       <div className="max-w-[520px] mx-auto px-5 py-6">
@@ -269,8 +269,8 @@ const MahjongRoomPage = () => {
               variant="outline"
               className="h-9 w-9 shrink-0"
               style={{
-                color: '#f2f2ea',
-                borderColor: 'rgba(255,255,255,0.16)',
+                color: '#222B26',
+                borderColor: '#E6EAE2',
               }}
               onClick={() => navigate('/?game=mahjong')}
             >
@@ -280,13 +280,13 @@ const MahjongRoomPage = () => {
               <div className="flex items-center gap-2">
                 <span
                   className="text-sm font-medium"
-                  style={{ color: '#c9c9bc' }}
+                  style={{ color: '#6B7A70' }}
                 >
                   麻将 ·
                 </span>
                 <h1
                   className="text-xl font-bold"
-                  style={{ color: '#f2f2ea' }}
+                  style={{ color: '#222B26' }}
                 >
                   {data.room.name}
                 </h1>
@@ -296,26 +296,26 @@ const MahjongRoomPage = () => {
                 onClick={handleCopyRoomCode}
                 title="点击复制房间号"
               >
-                <span className="text-xs" style={{ color: '#c9c9bc' }}>
+                <span className="text-xs" style={{ color: '#6B7A70' }}>
                   房间号：
                 </span>
                 <span
                   className="text-xs font-mono font-medium"
-                  style={{ color: '#f2f2ea' }}
+                  style={{ color: '#222B26' }}
                 >
                   {data.room.roomCode}
                 </span>
                 <Copy
                   className="w-3 h-3"
-                  style={{ color: '#f2f2ea' }}
+                  style={{ color: '#222B26' }}
                 />
               </div>
               <div className="flex items-center gap-2 mt-1">
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded"
                   style={{
-                    backgroundColor: 'rgba(212,175,55,0.15)',
-                    color: '#e8c96a',
+                    backgroundColor: 'rgba(176,141,30,0.12)',
+                    color: '#B08D1E',
                   }}
                 >
                   {isFreeMode ? '普通模式' : '坐下模式'}
@@ -324,14 +324,14 @@ const MahjongRoomPage = () => {
                   <button
                     type="button"
                     className="text-[10px] underline transition-opacity hover:opacity-70"
-                    style={{ color: '#c9c9bc' }}
+                    style={{ color: '#6B7A70' }}
                     onClick={() => setModeDialogOpen(true)}
                   >
                     切换模式
                   </button>
                 )}
               </div>
-              <p className="text-sm mt-0.5" style={{ color: '#c9c9bc' }}>
+              <p className="text-sm mt-0.5" style={{ color: '#6B7A70' }}>
                 你是：{currentUser?.name ?? '未设置昵称'}
               </p>
             </div>
@@ -384,12 +384,12 @@ const MahjongRoomPage = () => {
           <DialogContent
             style={{
               backgroundColor: '#0a3d22',
-              border: '1px solid rgba(255,255,255,0.16)',
-              color: '#f0f0e8',
+              border: '1px solid #E6EAE2',
+              color: '#222B26',
             }}
           >
             <DialogHeader>
-              <DialogTitle style={{ color: '#f2f2ea' }}>房间模式</DialogTitle>
+              <DialogTitle style={{ color: '#222B26' }}>房间模式</DialogTitle>
             </DialogHeader>
             <div className="flex flex-col gap-2 py-2">
               <Button
@@ -398,13 +398,13 @@ const MahjongRoomPage = () => {
                 disabled={switchingMode}
                 onClick={() => handleSwitchMode('free')}
                 style={{
-                  color: '#f0f0e8',
-                  borderColor: 'rgba(255,255,255,0.2)',
+                  color: '#222B26',
+                  borderColor: '#DCE3DC',
                 }}
               >
                 <div className="flex flex-col items-start">
                   <span className="font-semibold">普通模式</span>
-                  <span className="text-xs" style={{ color: '#c9c9bc' }}>
+                  <span className="text-xs" style={{ color: '#6B7A70' }}>
                     进入房间即可转账（需全部离座才能从坐下模式切回）
                   </span>
                 </div>
@@ -415,13 +415,13 @@ const MahjongRoomPage = () => {
                 disabled={switchingMode}
                 onClick={() => handleSwitchMode('seated')}
                 style={{
-                  color: '#f0f0e8',
-                  borderColor: 'rgba(255,255,255,0.2)',
+                  color: '#222B26',
+                  borderColor: '#DCE3DC',
                 }}
               >
                 <div className="flex flex-col items-start">
                   <span className="font-semibold">坐下模式</span>
-                  <span className="text-xs" style={{ color: '#c9c9bc' }}>
+                  <span className="text-xs" style={{ color: '#6B7A70' }}>
                     必须坐下才能转账，打牌的人自己选位置
                   </span>
                 </div>
@@ -432,8 +432,8 @@ const MahjongRoomPage = () => {
                 variant="outline"
                 onClick={() => setModeDialogOpen(false)}
                 style={{
-                  color: '#f0f0e8',
-                  borderColor: 'rgba(255,255,255,0.2)',
+                  color: '#222B26',
+                  borderColor: '#DCE3DC',
                 }}
               >
                 关闭

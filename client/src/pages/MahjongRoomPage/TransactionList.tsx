@@ -29,9 +29,9 @@ const TransactionList = ({
       <div
         className="rounded-xl p-10 text-center"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.10)',
-          border: '1px solid rgba(255,255,255,0.16)',
-          color: '#c9c9bc',
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E6EAE2',
+          color: '#6B7A70',
         }}
       >
         还没有转账记录，点击头像转账开始记账
@@ -43,15 +43,15 @@ const TransactionList = ({
     <div
       className="rounded-xl overflow-hidden"
       style={{
-        backgroundColor: 'rgba(255,255,255,0.10)',
-        border: '1px solid rgba(255,255,255,0.16)',
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E6EAE2',
       }}
     >
       <div
         className="px-3 py-2.5 text-sm font-semibold flex items-center justify-between"
         style={{
-          color: '#f2f2ea',
-          borderBottom: '1px solid rgba(0,0,0,0.25)',
+          color: '#222B26',
+          borderBottom: '1px solid #EDF0EB',
         }}
       >
         <span>转账记录</span>
@@ -65,7 +65,7 @@ const TransactionList = ({
       </div>
       <div
         className="max-h-[180px] overflow-y-auto divide-y"
-        style={{ borderColor: 'rgba(255,255,255,0.10)' }}
+        style={{ borderColor: '#FFFFFF' }}
       >
         {transactions.map((tx: MahjongTransaction) => {
           const isReversal = !!tx.reversalOf;
@@ -80,15 +80,15 @@ const TransactionList = ({
               <div className="flex-1 min-w-0">
                 <div
                   className="text-[11px] mb-0.5 flex items-center gap-1.5"
-                  style={{ color: '#c9c9bc' }}
+                  style={{ color: '#6B7A70' }}
                 >
                   {formatDate(tx.createdAt)}
                   {isReversal && (
                     <span
                       className="text-[10px] px-1.5 py-px rounded font-medium"
                       style={{
-                        color: '#07301a',
-                        backgroundColor: '#e8c96a',
+                        color: '#ffffff',
+                        backgroundColor: '#B08D1E',
                       }}
                     >
                       冲正
@@ -97,13 +97,13 @@ const TransactionList = ({
                 </div>
                 <div
                   className="text-sm font-medium truncate"
-                  style={{ color: '#f0f0e8' }}
+                  style={{ color: '#222B26' }}
                 >
-                  <span style={{ color: '#ef4444' }}>{tx.payerName}</span>
-                  <span style={{ color: '#c9c9bc' }} className="mx-2">
+                  <span style={{ color: '#E5484D' }}>{tx.payerName}</span>
+                  <span style={{ color: '#6B7A70' }} className="mx-2">
                     →
                   </span>
-                  <span style={{ color: '#22c55e' }}>
+                  <span style={{ color: '#12904D' }}>
                     {tx.payeeType === 'tea_fee'
                       ? '茶水费'
                       : tx.payeeName}
@@ -112,7 +112,7 @@ const TransactionList = ({
                 {tx.remark && (
                   <div
                     className="text-xs mt-1"
-                    style={{ color: '#c9c9bc' }}
+                    style={{ color: '#6B7A70' }}
                   >
                     备注：{tx.remark}
                   </div>
@@ -122,15 +122,15 @@ const TransactionList = ({
                 <span
                   className="font-mono font-semibold"
                   style={{
-                    color: isReversal ? '#c9c9bc' : '#f2f2ea',
+                    color: isReversal ? '#9CA3AF' : '#222B26',
                   }}
                 >
                   ¥{amountNum.toFixed(2)}
                 </span>
                 {canReverse && (
                   <button
-                    className="p-1.5 rounded-md transition-colors hover:bg-white/10"
-                    style={{ color: '#c9c9bc' }}
+                    className="p-1.5 rounded-md transition-colors hover:bg-black/10"
+                    style={{ color: '#6B7A70' }}
                     onClick={() => onReverse(tx)}
                     title="冲正（撤销这笔转账）"
                   >

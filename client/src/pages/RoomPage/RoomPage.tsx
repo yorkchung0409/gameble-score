@@ -175,8 +175,8 @@ const RoomPage = () => {
       <div
         className="min-h-screen w-full flex items-center justify-center"
         style={{
-          background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
-          color: '#f0f0e8',
+          background: '#F4F6F1',
+          color: '#222B26',
         }}
       >
         加载中...
@@ -189,8 +189,8 @@ const RoomPage = () => {
       <div
         className="min-h-screen w-full flex items-center justify-center"
         style={{
-          background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
-          color: '#f0f0e8',
+          background: '#F4F6F1',
+          color: '#222B26',
         }}
       >
         <div className="text-center">
@@ -207,7 +207,7 @@ const RoomPage = () => {
     <div
       className="min-h-screen w-full"
       style={{
-        background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
+        background: '#F4F6F1',
       }}
     >
       <div className="max-w-[520px] mx-auto px-5 py-6">
@@ -219,8 +219,8 @@ const RoomPage = () => {
               variant="outline"
               className="h-9 w-9 shrink-0"
               style={{
-                color: '#f2f2ea',
-                borderColor: 'rgba(255,255,255,0.16)',
+                color: '#222B26',
+                borderColor: '#E6EAE2',
               }}
               onClick={() =>
                 navigate(
@@ -239,13 +239,13 @@ const RoomPage = () => {
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   className="text-xl font-bold h-9 w-60"
-                  style={{ color: '#f2f2ea' }}
+                  style={{ color: '#222B26' }}
                   autoFocus
                 />
                 <Button
                   size="icon"
                   className="h-9 w-9"
-                  style={{ backgroundColor: '#d4af37', color: '#07301a' }}
+                  style={{ backgroundColor: '#1E7A46', color: '#ffffff' }}
                   onClick={saveRoomName}
                   disabled={savingName}
                 >
@@ -256,8 +256,8 @@ const RoomPage = () => {
                   variant="outline"
                   className="h-9 w-9"
                   style={{
-                    color: '#f0f0e8',
-                    borderColor: 'rgba(255,255,255,0.16)',
+                    color: '#222B26',
+                    borderColor: '#E6EAE2',
                   }}
                   onClick={cancelEditName}
                 >
@@ -269,33 +269,33 @@ const RoomPage = () => {
                 <div className="flex items-center gap-2">
                   <span
                     className="text-sm font-medium shrink-0"
-                    style={{ color: '#c9c9bc' }}
+                    style={{ color: '#6B7A70' }}
                   >
                     {gameTypeLabel} ·
                   </span>
                   <h1
                     className="text-xl font-bold cursor-pointer hover:opacity-80 truncate min-w-0"
-                    style={{ color: '#f2f2ea' }}
+                    style={{ color: '#222B26' }}
                     onClick={startEditName}
                   >
                     {data.room.roomName}
                   </h1>
                   <Pencil
                     className="w-4 h-4 cursor-pointer shrink-0"
-                    style={{ color: '#c9c9bc' }}
+                    style={{ color: '#6B7A70' }}
                     onClick={startEditName}
                   />
                 </div>
                 <button
                   type="button"
                   className="flex items-center gap-1 text-sm cursor-pointer hover:opacity-70 transition-opacity mt-1"
-                  style={{ color: '#f2f2ea' }}
+                  style={{ color: '#222B26' }}
                   onClick={handleCopyRoomCode}
                   title={
                     data.room.gameType === 'mahjong' ? '点击复制房间号' : '点击复制账本号'
                   }
                 >
-                  <span style={{ color: '#c9c9bc' }}>
+                  <span style={{ color: '#6B7A70' }}>
                     {data.room.gameType === 'mahjong' ? '房间号：' : '账本号：'}
                   </span>
                   <span className="tabular-nums font-medium">
@@ -311,8 +311,8 @@ const RoomPage = () => {
             <Button
               variant="outline"
               style={{
-                color: '#f2f2ea',
-                borderColor: 'rgba(255,255,255,0.16)',
+                color: '#222B26',
+                borderColor: '#E6EAE2',
               }}
               onClick={() => setPlayerDialogOpen(true)}
             >
@@ -321,8 +321,8 @@ const RoomPage = () => {
             </Button>
             <Button
               style={{
-                backgroundColor: '#d4af37',
-                color: '#07301a',
+                backgroundColor: '#1E7A46',
+                color: '#ffffff',
               }}
               onClick={openCreateGame}
             >
@@ -341,7 +341,7 @@ const RoomPage = () => {
         <div>
           <h2
             className="text-lg font-semibold mb-3"
-            style={{ color: '#f2f2ea' }}
+            style={{ color: '#222B26' }}
           >
             牌局记录
           </h2>
@@ -349,9 +349,9 @@ const RoomPage = () => {
             <div
               className="rounded-xl p-10 text-center"
               style={{
-                backgroundColor: 'rgba(255,255,255,0.10)',
-                border: '1px solid rgba(255,255,255,0.16)',
-                color: '#c9c9bc',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid #E6EAE2',
+                color: '#6B7A70',
               }}
             >
               还没有牌局记录，点击「添加牌局」开始记账

@@ -12,8 +12,8 @@ const fallback = (
   <div
     className="min-h-screen w-full flex items-center justify-center"
     style={{
-      background: 'linear-gradient(180deg, #0d4f2c 0%, #07301a 100%)',
-      color: '#c9c9bc',
+      background: '#F4F6F1',
+      color: '#6B7A70',
       fontSize: '14px',
     }}
   >
