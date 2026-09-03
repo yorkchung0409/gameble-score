@@ -1,5 +1,4 @@
 import type { MahjongRoomMember } from '@shared/api.interface';
-import { Button } from '@client/src/components/ui/button';
 
 interface BalanceItem {
   userId: string;
@@ -48,7 +47,7 @@ function Avatar({ userId, name }: { userId: string; name: string }) {
   const ch = (name || '?').trim().charAt(0);
   return (
     <span
-      className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+      className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold shrink-0"
       style={{ backgroundColor: avatarColor(userId), color: '#fff' }}
       aria-hidden="true"
     >
@@ -57,7 +56,7 @@ function Avatar({ userId, name }: { userId: string; name: string }) {
   );
 }
 
-// 快速转账图标（¥ 金币 + 双向箭头），与座位区保持一致
+// 快速转账图标（¥ 金币 + 双向箭头）
 const TRANSFER_SVG = (
   <svg
     viewBox="0 0 1024 1024"
@@ -69,6 +68,26 @@ const TRANSFER_SVG = (
   </svg>
 );
 
+// 成员头像右下角的转账小徽标
+function TransferBadge({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full flex items-center justify-center"
+      style={{
+        backgroundColor: '#d4af37',
+        color: '#07301a',
+        border: '1px solid rgba(255,255,255,0.4)',
+      }}
+    >
+      {TRANSFER_SVG}
+    </button>
+  );
+}
+
 const MemberSection = ({
   members,
   balances,
@@ -77,104 +96,64 @@ const MemberSection = ({
   onQuickTransfer,
 }: MemberSectionProps) => {
   return (
-    <div className="flex flex-col gap-1.5 mb-5">
+    <div className="flex flex-wrap gap-x-3 gap-y-2 mb-5">
       {members.map((m) => {
         const isMe = m.userId === currentUserId;
         const bal = balances.find((b) => b.userId === m.userId);
         return (
-          <div
-            key={m.userId}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-            style={{
-              backgroundColor: 'rgba(255,255,255,0.10)',
-              border: isMe
-                ? '2px solid #d4af37'
-                : '1px solid rgba(255,255,255,0.14)',
-            }}
-          >
-            <Avatar userId={m.userId} name={m.userName} />
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span
-                className="text-sm font-semibold truncate"
-                style={{ color: '#f0f0e8' }}
-                title={m.userName}
-              >
-                {m.userName}
-              </span>
+          <div key={m.userId} className="flex flex-col items-center gap-1 w-[68px] shrink-0">
+            <div className="relative">
+              <Avatar userId={m.userId} name={m.userName} />
               {isMe && (
                 <span
-                  className="text-[10px] px-1 py-px rounded shrink-0"
-                  style={{
-                    backgroundColor: 'rgba(212,175,55,0.18)',
-                    color: '#e8c96a',
-                  }}
+                  className="absolute -top-1.5 -right-1.5 text-[9px] px-1 py-px rounded-full font-bold"
+                  style={{ backgroundColor: '#d4af37', color: '#07301a' }}
                 >
                   我
                 </span>
               )}
-            </div>
-            <div className="ml-auto flex items-center gap-2 shrink-0">
-              <span className="text-sm" style={{ color: '#c9c9bc' }}>
-                {fmtBalance(bal ? bal.balance : '0')}
-              </span>
               {!isMe && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-6 w-6 [&_svg]:size-3"
-                  style={{
-                    color: '#d4af37',
-                    borderColor: 'rgba(212,175,55,0.4)',
-                  }}
+                <TransferBadge
+                  label={`向 ${m.userName} 转账`}
                   onClick={() => onQuickTransfer(m.userId)}
-                  aria-label="转账"
-                  title={`向 ${m.userName} 转账`}
-                >
-                  {TRANSFER_SVG}
-                </Button>
+                />
               )}
             </div>
+            <span
+              className="text-[11px] w-full text-center truncate"
+              style={{ color: '#f0f0e8' }}
+              title={m.userName}
+            >
+              {m.userName}
+            </span>
+            <span className="text-xs font-medium" style={{ color: '#c9c9bc' }}>
+              {fmtBalance(bal ? bal.balance : '0')}
+            </span>
           </div>
         );
       })}
 
       {/* 茶水费虚拟成员 */}
-      <div
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-        style={{
-          backgroundColor: 'rgba(212,175,55,0.12)',
-          border: '1px solid rgba(212,175,55,0.35)',
-        }}
-      >
-        <span
-          className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-          style={{ backgroundColor: '#d4af37', color: '#07301a' }}
-          aria-hidden="true"
-        >
-          ¥
-        </span>
-        <span className="text-sm font-semibold" style={{ color: '#e8c96a' }}>
+      <div className="flex flex-col items-center gap-1 w-[68px] shrink-0">
+        <div className="relative">
+          <span
+            className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold shrink-0"
+            style={{ backgroundColor: '#d4af37', color: '#07301a' }}
+            aria-hidden="true"
+          >
+            ¥
+          </span>
+          <TransferBadge
+            label="向茶水费转账"
+            onClick={() => onQuickTransfer('tea_fee')}
+          />
+        </div>
+        <span className="text-[11px] w-full text-center truncate" style={{ color: '#e8c96a' }}>
           茶水费
         </span>
-        <div className="ml-auto flex items-center gap-2 shrink-0">
-          <span className="text-sm" style={{ color: '#e8c96a' }}>
-            {fmtBalance(teaFeeTotal)}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-6 w-6 [&_svg]:size-3"
-            style={{
-              color: '#e8c96a',
-              borderColor: 'rgba(212,175,55,0.4)',
-            }}
-            onClick={() => onQuickTransfer('tea_fee')}
-            aria-label="转账到茶水费"
-            title="向茶水费转账"
-          >
-            {TRANSFER_SVG}
-          </Button>
-        </div>
+        <span className="text-xs font-medium" style={{ color: '#e8c96a' }}>
+          {fmtBalance(teaFeeTotal)}
+        </span>
       </div>
     </div>
   );
