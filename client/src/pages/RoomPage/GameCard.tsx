@@ -18,6 +18,8 @@ interface GameCardProps {
 }
 
 const formatAmount = (val: string): string => Number(val).toFixed(2);
+// 金额按分取整，避免浮点误差
+const fmtNum = (n: number): string => (Math.round(n * 100) / 100).toFixed(2);
 
 const netProfitColor = (net: string): string => {
   const n = Number(net);
@@ -30,11 +32,18 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
   // 默认折叠：折叠时只显示 日期 / 人数 / 流水
   const [expanded, setExpanded] = useState(false);
 
-  // 本局流水 = 所有赢家净盈亏之和（与后端 winSum 口径一致）
-  const turnover = game.players.reduce((sum, pl) => {
+  // 零和校验：赢流水=赢家净盈亏之和；输流水=输家净盈亏绝对值之和；差额理论应为 0
+  let winSum = 0;
+  let lossSum = 0;
+  for (const pl of game.players) {
     const np = Number(pl.netProfit);
-    return np > 0 ? sum + np : sum;
-  }, 0);
+    if (np > 0) winSum += np;
+    else if (np < 0) lossSum += -np;
+  }
+  winSum = Math.round(winSum * 100) / 100;
+  lossSum = Math.round(lossSum * 100) / 100;
+  const diff = Math.round((winSum - lossSum) * 100) / 100;
+  const balanced = Math.abs(diff) < 0.005;
 
   const handleDelete = async () => {
     if (window.confirm('确定删除这条牌局记录吗？')) {
@@ -77,10 +86,21 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-sm font-mono whitespace-nowrap" style={{ color: '#c9c9bc' }}>
             流水
-            <span className="ml-1" style={{ color: '#f0f0e8' }}>
-              ¥{formatAmount(String(Math.round(turnover * 100) / 100))}
+            <span
+              className="ml-1 font-semibold"
+              style={{ color: balanced ? '#f0f0e8' : '#ef4444' }}
+            >
+              ¥{fmtNum(winSum)}
             </span>
           </span>
+          {!balanced && (
+            <span
+              className="text-xs font-mono px-1.5 py-0.5 rounded whitespace-nowrap"
+              style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444' }}
+            >
+              未平 ¥{fmtNum(Math.abs(diff))}
+            </span>
+          )}
           {expanded ? (
             <ChevronUp className="w-4 h-4 text-[#c9c9bc]" />
           ) : (
@@ -89,7 +109,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
         </div>
       </div>
 
-      {/* 展开内容：总买入 + 操作 + 明细表 */}
+      {/* 展开内容：总买入 + 操作 + 明细表 + 零和校验 */}
       {expanded && (
         <>
           <div className="flex items-center justify-between gap-2 mt-3">
@@ -168,6 +188,18 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
                 ))}
               </TableBody>
             </Table>
+
+            {/* 零和校验行 */}
+            <div
+              className="flex items-center justify-end gap-3 mt-2 text-xs font-mono"
+              style={{ color: '#c9c9bc' }}
+            >
+              <span>赢 ¥{fmtNum(winSum)}</span>
+              <span>输 ¥{fmtNum(lossSum)}</span>
+              <span style={{ color: balanced ? '#22c55e' : '#ef4444' }}>
+                {balanced ? '已平衡' : `差额 ¥${fmtNum(Math.abs(diff))}`}
+              </span>
+            </div>
           </div>
         </>
       )}
