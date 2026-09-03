@@ -27,7 +27,7 @@ const RecentRooms = ({
     let cancelled = false;
     (async () => {
       try {
-        const res = await roomVisitsApi.getVisits(deviceId, gameType, 5);
+        const res = await roomVisitsApi.getVisits(deviceId, gameType, 3);
         if (!cancelled) {
           setVisits(res.visits);
         }
