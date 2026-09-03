@@ -91,7 +91,21 @@ const MemberSection = ({
   onQuickTransfer,
 }: MemberSectionProps) => {
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-2 mb-5">
+    <div
+      className="rounded-xl p-3 mb-5"
+      style={{
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E6EAE2',
+        boxShadow: '0 2px 12px rgba(30,40,34,0.06)',
+      }}
+    >
+      <div
+        className="inline-block rounded px-2 py-0.5 mb-2 text-xs font-semibold"
+        style={{ backgroundColor: '#F0F6F1', color: '#1E7A46' }}
+      >
+        成员
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-2">
       {members.map((m) => {
         const isMe = m.userId === currentUserId;
         const bal = balances.find((b) => b.userId === m.userId);
@@ -147,6 +161,7 @@ const MemberSection = ({
         <span className="text-xs font-medium" style={{ color: '#B08D1E' }}>
           {fmtBalance(teaFeeTotal)}
         </span>
+      </div>
       </div>
     </div>
   );

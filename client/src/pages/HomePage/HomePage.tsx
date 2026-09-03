@@ -65,7 +65,14 @@ const HomePage = () => {
       }}
     >
       <div className="w-full max-w-[520px]">
-        <div className="text-center mb-6">
+        <div
+          className="text-center mb-6"
+          style={{
+            background: 'linear-gradient(135deg, #EAF4ED, #DCEEE3)',
+            borderRadius: 16,
+            padding: '22px 16px 18px',
+          }}
+        >
           <h1
             className="text-4xl font-bold mb-2"
             style={{ color: '#B08D1E' }}
