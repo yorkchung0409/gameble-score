@@ -56,7 +56,10 @@ const TransactionList = ({
           仅能冲正自己付款的记录
         </span>
       </div>
-      <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.10)' }}>
+      <div
+        className="max-h-[260px] overflow-y-auto divide-y"
+        style={{ borderColor: 'rgba(255,255,255,0.10)' }}
+      >
         {transactions.map((tx: MahjongTransaction) => {
           const isReversal = !!tx.reversalOf;
           const canReverse = tx.payerId === currentUserId;

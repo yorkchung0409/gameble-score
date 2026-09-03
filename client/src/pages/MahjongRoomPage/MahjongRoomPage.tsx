@@ -359,8 +359,6 @@ const MahjongRoomPage = () => {
         )}
 
         <ScoreBoard
-          balances={data.stats.balances}
-          teaFeeTotal={data.stats.teaFeeTotal}
           totalTurnover={data.stats.totalTurnover}
           balanceCheckPassed={balanceCheckPassed}
         />
