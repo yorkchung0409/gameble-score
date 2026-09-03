@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS game_players (
 );
 CREATE INDEX IF NOT EXISTS idx_game_players_game_id ON game_players(game_id);
 CREATE INDEX IF NOT EXISTS idx_game_players_player_id ON game_players(player_id);
+CREATE UNIQUE INDEX IF NOT EXISTS game_players_game_id_player_id_key ON game_players(game_id, player_id);
 
 -- 麻将模块
 CREATE TABLE IF NOT EXISTS users (
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS mahjong_transactions (
   created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_mahjong_transactions_room_id ON mahjong_transactions(room_id);
+CREATE UNIQUE INDEX IF NOT EXISTS mahjong_transactions_reversal_of_key ON mahjong_transactions(reversal_of);
 
 -- 房间访问历史
 CREATE TABLE IF NOT EXISTS user_room_visits (

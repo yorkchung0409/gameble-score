@@ -255,6 +255,14 @@ export class PokerService {
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
+    // 该人员已有历史牌局时禁止删除，避免级联删除改写历史账目
+    const historyRows = await this.db
+      .select({ id: gamePlayers.id })
+      .from(gamePlayers)
+      .where(eq(gamePlayers.playerId, playerId));
+    if (historyRows.length > 0) {
+      throw new BadRequestException('该人员已有历史牌局记录，无法删除');
+    }
     const deleted = await this.db
       .delete(players)
       .where(and(eq(players.id, playerId), eq(players.roomId, roomRows[0].id)))
@@ -282,16 +290,21 @@ export class PokerService {
 
     const roomId = roomRows[0].id;
 
-    if (dto.players.length > 100) {
+    // 按玩家去重，防止同一玩家在一局中重复出现导致统计翻倍
+    const uniquePlayers = Array.from(
+      new Map(dto.players.map((p) => [p.playerId, p])).values(),
+    );
+
+    if (uniquePlayers.length > 100) {
       throw new BadRequestException('单局玩家数量不能超过 100');
     }
     // 校验金额非负
-    for (const p of dto.players) {
+    for (const p of uniquePlayers) {
       parseNonNegativeAmount(p.buyIn, '买入');
       parseNonNegativeAmount(p.balance, '结余');
     }
     // 校验玩家都属于该房间（防注入不属于房间的玩家）
-    const cgPlayerIds = Array.from(new Set(dto.players.map((p) => p.playerId)));
+    const cgPlayerIds = Array.from(new Set(uniquePlayers.map((p) => p.playerId)));
     const cgRoomPlayers = await this.db
       .select({ id: players.id })
       .from(players)
@@ -309,7 +322,7 @@ export class PokerService {
       const gpRows = await tx
         .insert(gamePlayers)
         .values(
-          dto.players.map((p) => {
+          uniquePlayers.map((p) => {
             const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
             const balance = parseNonNegativeAmount(p.balance, '结余');
             return {
@@ -323,7 +336,7 @@ export class PokerService {
         )
         .returning();
 
-      const playerIds = dto.players.map((p) => p.playerId);
+      const playerIds = uniquePlayers.map((p) => p.playerId);
       const playerListRows = await tx
         .select({ id: players.id, name: players.name })
         .from(players)
@@ -385,19 +398,25 @@ export class PokerService {
       throw new NotFoundException('牌局不存在');
     }
 
+    // 按玩家去重，防止同一玩家在一局中重复出现导致统计翻倍
+    const uniquePlayers =
+      dto.players !== undefined
+        ? Array.from(new Map(dto.players.map((p) => [p.playerId, p])).values())
+        : [];
+
     if (dto.players !== undefined) {
-      if (dto.players.length === 0) {
+      if (uniquePlayers.length === 0) {
         throw new BadRequestException('牌局至少需要一名玩家');
       }
-      if (dto.players.length > 100) {
+      if (uniquePlayers.length > 100) {
         throw new BadRequestException('单局玩家数量不能超过 100');
       }
-      for (const p of dto.players) {
+      for (const p of uniquePlayers) {
         parseNonNegativeAmount(p.buyIn, '买入');
         parseNonNegativeAmount(p.balance, '结余');
       }
       // 校验玩家都属于该房间
-      const ugPlayerIds = Array.from(new Set(dto.players.map((p) => p.playerId)));
+      const ugPlayerIds = Array.from(new Set(uniquePlayers.map((p) => p.playerId)));
       const ugRoomPlayers = await this.db
         .select({ id: players.id })
         .from(players)
@@ -430,7 +449,7 @@ export class PokerService {
         const gpRows = await tx
           .insert(gamePlayers)
           .values(
-            dto.players.map((p) => {
+            uniquePlayers.map((p) => {
               const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
               const balance = parseNonNegativeAmount(p.balance, '结余');
               return {
@@ -444,7 +463,7 @@ export class PokerService {
           )
           .returning();
 
-        const playerIds = dto.players.map((p) => p.playerId);
+        const playerIds = uniquePlayers.map((p) => p.playerId);
         const playerListRows = await tx
           .select({ id: players.id, name: players.name })
           .from(players)

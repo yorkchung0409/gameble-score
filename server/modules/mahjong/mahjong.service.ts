@@ -701,6 +701,7 @@ export class MahjongService {
         payeeId: mahjongTransactions.payeeId,
         amount: mahjongTransactions.amount,
         remark: mahjongTransactions.remark,
+        reversalOf: mahjongTransactions.reversalOf,
       })
       .from(mahjongTransactions)
       .where(
@@ -717,6 +718,20 @@ export class MahjongService {
     // 权限校验：只有初始付款方本人才能冲正
     if (origin.payerId !== operatorUserId) {
       throw new ForbiddenException('只能冲正自己付款的转账记录');
+    }
+
+    // 禁止冲正“冲正记录”本身
+    if (origin.reversalOf) {
+      throw new BadRequestException('不能冲正一笔冲正记录');
+    }
+
+    // 该记录已被冲正时禁止重复冲正
+    const reversedRows = await this.db
+      .select({ id: mahjongTransactions.id })
+      .from(mahjongTransactions)
+      .where(eq(mahjongTransactions.reversalOf, transactionId));
+    if (reversedRows.length > 0) {
+      throw new BadRequestException('该记录已被冲正，不能重复冲正');
     }
 
     // 构造冲正记录

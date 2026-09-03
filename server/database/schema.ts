@@ -75,6 +75,7 @@ export const gamePlayers = pgTable(
     createdAt: timestamp('created_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
+    uniqueIndex('game_players_game_id_player_id_key').on(table.gameId, table.playerId),
     index('idx_game_players_game_id').on(table.gameId),
     index('idx_game_players_player_id').on(table.playerId),
     foreignKey({
@@ -184,6 +185,7 @@ export const mahjongTransactions = pgTable(
     createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
+    uniqueIndex('mahjong_transactions_reversal_of_key').on(table.reversalOf),
     index('idx_mahjong_transactions_room_id').on(table.roomId),
     foreignKey({
       columns: [table.roomId],
