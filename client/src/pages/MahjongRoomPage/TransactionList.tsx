@@ -65,7 +65,7 @@ const TransactionList = ({
       </div>
       <div
         className="max-h-[180px] overflow-y-auto divide-y"
-        style={{ borderColor: '#FFFFFF' }}
+        style={{ borderColor: '#EBEEE9' }}
       >
         {transactions.map((tx: MahjongTransaction) => {
           const isReversal = !!tx.reversalOf;

@@ -66,7 +66,7 @@ const PlayerManageDialog = ({
       <DialogContent
         className="max-w-md"
         style={{
-          backgroundColor: '#0a3d22',
+          backgroundColor: '#FFFFFF',
           border: '1px solid #E6EAE2',
           color: '#222B26',
         }}
