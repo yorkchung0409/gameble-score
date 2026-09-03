@@ -20,7 +20,7 @@ const TexasPanel = ({ gameType }: TexasPanelProps) => {
   const navigate = useNavigate();
   const deviceId = useDeviceId();
 
-  const [roomName, setRoomName] = useState<string>('我的德州账本');
+  const [roomName, setRoomName] = useState<string>('我的账本');
   const [creating, setCreating] = useState<boolean>(false);
 
   const handleCreate = async (e: FormEvent) => {

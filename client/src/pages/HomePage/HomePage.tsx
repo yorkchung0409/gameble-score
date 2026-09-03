@@ -135,7 +135,7 @@ const HomePage = () => {
               className="flex-1 text-base font-medium"
               style={{ color: '#222B26' }}
             >
-              德州
+              扑克
             </TabsTrigger>
             </TabsList>
 
