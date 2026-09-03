@@ -262,7 +262,7 @@ const MahjongRoomPage = () => {
       }}
     >
       <div className="max-w-[520px] mx-auto px-5 py-6">
-        <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
             <Button
               size="icon"
@@ -278,39 +278,12 @@ const MahjongRoomPage = () => {
             </Button>
             <div>
               <div className="flex items-center gap-2">
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: '#6B7A70' }}
-                >
-                  麻将 ·
-                </span>
                 <h1
                   className="text-xl font-bold"
                   style={{ color: '#222B26' }}
                 >
-                  {data.room.name}
+                  麻将
                 </h1>
-              </div>
-              <div
-                className="flex items-center gap-1 mt-0.5 cursor-pointer select-none transition-opacity hover:opacity-70"
-                onClick={handleCopyRoomCode}
-                title="点击复制房间号"
-              >
-                <span className="text-xs" style={{ color: '#6B7A70' }}>
-                  房间号：
-                </span>
-                <span
-                  className="text-xs font-mono font-medium"
-                  style={{ color: '#222B26' }}
-                >
-                  {data.room.roomCode}
-                </span>
-                <Copy
-                  className="w-3 h-3"
-                  style={{ color: '#222B26' }}
-                />
-              </div>
-              <div className="flex items-center gap-2 mt-1">
                 <span
                   className="text-[10px] px-1.5 py-0.5 rounded"
                   style={{
@@ -331,9 +304,25 @@ const MahjongRoomPage = () => {
                   </button>
                 )}
               </div>
-              <p className="text-sm mt-0.5" style={{ color: '#6B7A70' }}>
-                你是：{currentUser?.name ?? '未设置昵称'}
-              </p>
+              <div
+                className="flex items-center gap-1 mt-1 cursor-pointer select-none transition-opacity hover:opacity-70"
+                onClick={handleCopyRoomCode}
+                title="点击复制房间号"
+              >
+                <span className="text-xs" style={{ color: '#6B7A70' }}>
+                  房间号：
+                </span>
+                <span
+                  className="text-xs font-mono font-medium"
+                  style={{ color: '#222B26' }}
+                >
+                  {data.room.roomCode}
+                </span>
+                <Copy
+                  className="w-3 h-3"
+                  style={{ color: '#222B26' }}
+                />
+              </div>
             </div>
           </div>
         </div>

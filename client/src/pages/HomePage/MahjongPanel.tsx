@@ -18,7 +18,6 @@ const MahjongPanel = () => {
   const { currentUser, deviceId } = useMahjongUser();
   const [activeTab, setActiveTab] = useState<string>('create');
 
-  const [roomName, setRoomName] = useState<string>('麻将牌局');
   const [roomCodeInput, setRoomCodeInput] = useState<string>('');
   const [creating, setCreating] = useState<boolean>(false);
 
@@ -27,14 +26,10 @@ const MahjongPanel = () => {
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
-    if (!roomName.trim()) {
-      toast.error('请输入房间名称');
-      return;
-    }
     setCreating(true);
     try {
       const res = await mahjongApi.createRoom({
-        name: roomName.trim(),
+        name: '麻将牌局',
         roomCode: roomCodeInput.trim() || undefined,
         creatorUserId: currentUser?.id,
       });
@@ -77,7 +72,7 @@ const MahjongPanel = () => {
         pathPrefix="/mahjong/"
       />
     <div
-      className="rounded-xl p-6 shadow-lg"
+      className="rounded-xl p-4 shadow-lg"
       style={{
         backgroundColor: '#FFFFFF',
         border: '1px solid #E6EAE2',
@@ -85,7 +80,7 @@ const MahjongPanel = () => {
       }}
     >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full mb-6 bg-[#E8ECE6]">
+        <TabsList className="w-full mb-4 bg-[#E8ECE6]">
           <TabsTrigger value="create" className="flex-1 text-[#222B26]">
             创建房间
           </TabsTrigger>
@@ -95,22 +90,7 @@ const MahjongPanel = () => {
         </TabsList>
 
         <TabsContent value="create">
-          <form onSubmit={handleCreate} className="flex flex-col gap-4">
-            <div>
-              <label
-                className="block text-sm mb-1.5"
-                style={{ color: '#6B7A70' }}
-              >
-                房间名称
-              </label>
-              <Input
-                type="text"
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value)}
-                placeholder="请输入房间名称"
-                style={{ color: '#222B26' }}
-              />
-            </div>
+          <form onSubmit={handleCreate} className="flex flex-col gap-3">
             <div>
               <label
                 className="block text-sm mb-1.5"
@@ -141,7 +121,7 @@ const MahjongPanel = () => {
         </TabsContent>
 
         <TabsContent value="join">
-          <form onSubmit={handleJoin} className="flex flex-col gap-4">
+          <form onSubmit={handleJoin} className="flex flex-col gap-3">
             <div>
               <label
                 className="block text-sm mb-1.5"
