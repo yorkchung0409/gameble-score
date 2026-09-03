@@ -104,7 +104,7 @@ const RecentRooms = ({
                 className="text-sm font-medium truncate"
                 style={{ color: '#222B26' }}
               >
-                {v.roomName}
+                {gameType === 'mahjong' ? `麻将 ${v.roomCode}` : v.roomName}
               </span>
               <span
                 className="text-xs mt-0.5"
