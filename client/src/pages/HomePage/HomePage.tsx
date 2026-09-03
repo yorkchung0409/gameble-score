@@ -59,7 +59,7 @@ const HomePage = () => {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center px-5 py-6"
+      className="min-h-screen w-full flex justify-center items-start px-5 py-6"
       style={{
         background: '#F4F6F1',
       }}
