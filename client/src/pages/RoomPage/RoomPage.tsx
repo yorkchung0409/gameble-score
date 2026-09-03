@@ -298,7 +298,7 @@ const RoomPage = () => {
                   <span style={{ color: '#c9c9bc' }}>
                     {data.room.gameType === 'mahjong' ? '房间号：' : '账本号：'}
                   </span>
-                  <span className="font-mono font-medium">
+                  <span className="tabular-nums font-medium">
                     {data.room.roomCode}
                   </span>
                   <Copy className="w-3.5 h-3.5" />

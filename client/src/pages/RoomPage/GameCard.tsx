@@ -84,7 +84,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
           </span>
         </div>
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <span className="text-sm font-mono whitespace-nowrap" style={{ color: '#c9c9bc' }}>
+          <span className="text-sm tabular-nums whitespace-nowrap" style={{ color: '#c9c9bc' }}>
             流水
             <span
               className="ml-1 font-semibold"
@@ -95,7 +95,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
           </span>
           {!balanced && (
             <span
-              className="text-xs font-mono px-1.5 py-0.5 rounded whitespace-nowrap"
+              className="text-xs tabular-nums px-1.5 py-0.5 rounded whitespace-nowrap"
               style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444' }}
             >
               未平 ¥{fmtNum(Math.abs(diff))}
@@ -113,7 +113,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
       {expanded && (
         <>
           <div className="flex items-center justify-between gap-2 mt-3">
-            <div className="text-sm font-mono" style={{ color: '#c9c9bc' }}>
+            <div className="text-sm tabular-nums" style={{ color: '#c9c9bc' }}>
               总买入 ¥{formatAmount(game.totalBuyIn)}
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -147,13 +147,13 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
               <TableHeader>
                 <TableRow className="border-b border-[rgba(255_255_255_0.15)] hover:bg-transparent">
                   <TableHead className="text-[#c9c9bc] font-normal">人员</TableHead>
-                  <TableHead className="text-right text-[#c9c9bc] font-normal font-mono">
+                  <TableHead className="text-right text-[#c9c9bc] font-normal tabular-nums">
                     买入
                   </TableHead>
-                  <TableHead className="text-right text-[#c9c9bc] font-normal font-mono">
+                  <TableHead className="text-right text-[#c9c9bc] font-normal tabular-nums">
                     结余
                   </TableHead>
-                  <TableHead className="text-right text-[#c9c9bc] font-normal font-mono">
+                  <TableHead className="text-right text-[#c9c9bc] font-normal tabular-nums">
                     净盈亏
                   </TableHead>
                 </TableRow>
@@ -166,19 +166,19 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
                   >
                     <TableCell style={{ color: '#f0f0e8' }}>{pl.playerName}</TableCell>
                     <TableCell
-                      className="text-right font-mono"
+                      className="text-right tabular-nums"
                       style={{ color: '#f0f0e8' }}
                     >
                       {formatAmount(pl.buyIn)}
                     </TableCell>
                     <TableCell
-                      className="text-right font-mono"
+                      className="text-right tabular-nums"
                       style={{ color: '#f0f0e8' }}
                     >
                       {formatAmount(pl.balance)}
                     </TableCell>
                     <TableCell
-                      className="text-right font-mono font-semibold"
+                      className="text-right tabular-nums font-semibold"
                       style={{ color: netProfitColor(pl.netProfit) }}
                     >
                       {Number(pl.netProfit) >= 0 ? '+' : ''}
@@ -191,7 +191,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
 
             {/* 零和校验行 */}
             <div
-              className="flex items-center justify-end gap-3 mt-2 text-xs font-mono"
+              className="flex items-center justify-end gap-3 mt-2 text-xs tabular-nums"
               style={{ color: '#c9c9bc' }}
             >
               <span>赢 ¥{fmtNum(winSum)}</span>

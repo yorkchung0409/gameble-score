@@ -241,7 +241,7 @@ const GameDialog = ({
                     value={row.buyIn}
                     onChange={(e) => updateRow(index, 'buyIn', e.target.value)}
                     placeholder="0"
-                    className="text-right font-mono"
+                    className="text-right tabular-nums"
                     style={{ color: '#f0f0e8' }}
                   />
                 </div>
@@ -253,7 +253,7 @@ const GameDialog = ({
                       updateRow(index, 'balance', e.target.value)
                     }
                     placeholder="0"
-                    className="text-right font-mono"
+                    className="text-right tabular-nums"
                     style={{ color: '#f0f0e8' }}
                   />
                 </div>

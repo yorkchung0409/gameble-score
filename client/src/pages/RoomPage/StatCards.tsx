@@ -16,7 +16,7 @@ const StatCards = ({ totalGames }: StatCardsProps) => {
         总场次
       </span>
       <span
-        className="text-2xl font-bold font-mono"
+        className="text-2xl font-bold tabular-nums"
         style={{ color: '#f2f2ea' }}
       >
         {totalGames}
