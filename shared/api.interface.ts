@@ -122,14 +122,23 @@ export interface MahjongTransaction {
   createdAt: string;
 }
 
+export interface MahjongRoomMember {
+  userId: string;
+  userName: string;
+  joinedAt: string;
+}
+
 export interface MahjongRoomDetailResponse {
   room: {
     id: string;
     roomCode: string;
     name: string;
+    mode: 'seated' | 'free';
+    creatorUserId: string | null;
     createdAt: string;
   };
   seats: MahjongSeat[];
+  members: MahjongRoomMember[];
   transactions: MahjongTransaction[];
   stats: {
     balances: { userId: string; userName: string; balance: string }[];
@@ -142,6 +151,7 @@ export interface MahjongRoomDetailResponse {
 export interface CreateMahjongRoomRequest {
   roomCode?: string;
   name: string;
+  creatorUserId?: string;
 }
 
 export interface CreateMahjongRoomResponse {
@@ -160,6 +170,15 @@ export interface SitDownRequest {
 
 export interface LeaveSeatRequest {
   userId: string;
+}
+
+export interface JoinRoomRequest {
+  userId: string;
+}
+
+export interface UpdateRoomModeRequest {
+  mode: 'seated' | 'free';
+  operatorUserId: string;
 }
 
 export interface CreateTransactionRequest {

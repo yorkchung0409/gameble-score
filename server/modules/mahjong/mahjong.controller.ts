@@ -15,6 +15,8 @@ import type {
   MahjongRoomDetailResponse,
   SitDownRequest,
   LeaveSeatRequest,
+  JoinRoomRequest,
+  UpdateRoomModeRequest,
   CreateTransactionRequest,
   ReverseTransactionRequest,
 } from '@shared/api.interface';
@@ -43,7 +45,11 @@ export class MahjongController {
   async createRoom(
     @Body() dto: CreateMahjongRoomRequest,
   ): Promise<CreateMahjongRoomResponse> {
-    return this.mahjongService.createRoom(dto.roomCode, dto.name);
+    return this.mahjongService.createRoom(
+      dto.roomCode,
+      dto.name,
+      dto.creatorUserId,
+    );
   }
 
   @Get('rooms/:roomCode')
@@ -69,6 +75,28 @@ export class MahjongController {
     @Body() dto: LeaveSeatRequest,
   ): Promise<MahjongRoomDetailResponse> {
     return this.mahjongService.leaveSeat(roomCode, dto.userId);
+  }
+
+  // ---------- 成员 / 模式相关 ----------
+
+  @Post('rooms/:roomCode/join')
+  async joinRoom(
+    @Param('roomCode') roomCode: string,
+    @Body() dto: JoinRoomRequest,
+  ): Promise<MahjongRoomDetailResponse> {
+    return this.mahjongService.joinRoom(roomCode, dto.userId);
+  }
+
+  @Post('rooms/:roomCode/mode')
+  async updateRoomMode(
+    @Param('roomCode') roomCode: string,
+    @Body() dto: UpdateRoomModeRequest,
+  ): Promise<MahjongRoomDetailResponse> {
+    return this.mahjongService.updateMode(
+      roomCode,
+      dto.mode,
+      dto.operatorUserId,
+    );
   }
 
   // ---------- 转账记录相关 ----------

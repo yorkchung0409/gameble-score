@@ -5,9 +5,17 @@ import { ArrowLeft, Copy } from 'lucide-react';
 import { mahjongApi, roomVisitsApi } from '@client/src/api';
 import { useMahjongUser } from '@client/src/hooks/useMahjongUser';
 import { Button } from '@client/src/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@client/src/components/ui/dialog';
 import SeatSection from './SeatSection';
+import MemberSection from './MemberSection';
 import ScoreBoard from './ScoreBoard';
-import TransactionDialog from './TransactionDialog';
+import TransactionDialog, { PayeeOption } from './TransactionDialog';
 import type { TransactionDialogHandle } from './TransactionDialog';
 import TransactionList from './TransactionList';
 import type {
@@ -28,14 +36,28 @@ const MahjongRoomPage = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [modeDialogOpen, setModeDialogOpen] = useState<boolean>(false);
+  const [switchingMode, setSwitchingMode] = useState<boolean>(false);
   const txDialogRef = useRef<TransactionDialogHandle>(null);
 
   const fetchRoom = useCallback(
     async (showError = true) => {
       if (!roomCode) return;
       try {
-        const res = await mahjongApi.getRoom(roomCode);
-        setData(res);
+        let detail: MahjongRoomDetailResponse;
+        if (currentUser) {
+          // 进入房间自动登记为成员（幂等）
+          try {
+            detail = await mahjongApi.joinRoom(roomCode, {
+              userId: currentUser.id,
+            });
+          } catch {
+            detail = await mahjongApi.getRoom(roomCode);
+          }
+        } else {
+          detail = await mahjongApi.getRoom(roomCode);
+        }
+        setData(detail);
         setError(null);
 
         if (currentUser && deviceId) {
@@ -43,10 +65,10 @@ const MahjongRoomPage = () => {
             await roomVisitsApi.recordVisit({
               deviceId,
               userId: currentUser.id,
-              roomId: res.room.id,
+              roomId: detail.room.id,
               gameType: 'mahjong',
-              roomCode: res.room.roomCode,
-              roomName: res.room.name,
+              roomCode: detail.room.roomCode,
+              roomName: detail.room.name,
             });
           } catch {
             // 记录失败不影响主流程
@@ -106,6 +128,29 @@ const MahjongRoomPage = () => {
     }
   };
 
+  const handleSwitchMode = async (mode: 'seated' | 'free') => {
+    if (!roomCode || !currentUser || !data) return;
+    // 坐下模式 -> 普通模式：需所有玩家离座（前端预校验，后端同样校验）
+    if (mode === 'free' && data.seats.length > 0) {
+      toast.error('有玩家正在座位上，需全部离座后才能切换为普通模式');
+      return;
+    }
+    setSwitchingMode(true);
+    try {
+      await mahjongApi.updateRoomMode(roomCode, {
+        mode,
+        operatorUserId: currentUser.id,
+      });
+      toast.success(mode === 'free' ? '已切换为普通模式' : '已切换为坐下模式');
+      setModeDialogOpen(false);
+      fetchRoom(true);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '切换失败');
+    } finally {
+      setSwitchingMode(false);
+    }
+  };
+
   const handleReverseTransaction = async (tx: MahjongTransaction) => {
     if (!roomCode || !currentUser) return;
 
@@ -126,8 +171,8 @@ const MahjongRoomPage = () => {
     }
   };
 
-  const handleQuickTransfer = (payeeUserId: string) => {
-    txDialogRef.current?.open(payeeUserId);
+  const handleQuickTransfer = (payeeId: string) => {
+    txDialogRef.current?.open(payeeId);
   };
 
   const handleCopyRoomCode = async () => {
@@ -188,11 +233,26 @@ const MahjongRoomPage = () => {
   }
 
   const currentUserId = currentUser?.id ?? '';
+  const isFreeMode = data.room.mode === 'free';
+  const isOwner = !!data.room.creatorUserId && data.room.creatorUserId === currentUserId;
   const mySeat = data.seats.find(
     (s: MahjongSeat) => s.userId === currentUserId,
   );
-  const balanceCheckPassed = data.stats.balanceCheck === 'balanced';
   const currentUserSeated = !!mySeat;
+  const balanceCheckPassed = data.stats.balanceCheck === 'balanced';
+
+  const payeeOptions: PayeeOption[] = isFreeMode
+    ? data.members
+        .filter((m) => m.userId !== currentUserId)
+        .map((m) => ({ id: m.userId, name: m.userName }))
+    : data.seats
+        .filter((s) => s.userId !== currentUserId)
+        .map((s) => ({ id: s.userId, name: s.userName }));
+
+  // 坐下模式：未入座时手动转账按钮给出提示
+  const blockedMessage = !isFreeMode && !currentUserSeated
+    ? '坐下后才能转账，请先选择座位入座'
+    : undefined;
 
   return (
     <div
@@ -250,6 +310,27 @@ const MahjongRoomPage = () => {
                   style={{ color: '#f2f2ea' }}
                 />
               </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: 'rgba(212,175,55,0.15)',
+                    color: '#e8c96a',
+                  }}
+                >
+                  {isFreeMode ? '普通模式' : '坐下模式'}
+                </span>
+                {isOwner && (
+                  <button
+                    type="button"
+                    className="text-[10px] underline transition-opacity hover:opacity-70"
+                    style={{ color: '#c9c9bc' }}
+                    onClick={() => setModeDialogOpen(true)}
+                  >
+                    切换模式
+                  </button>
+                )}
+              </div>
               <p className="text-sm mt-0.5" style={{ color: '#c9c9bc' }}>
                 你是：{currentUser?.name ?? '未设置昵称'}
               </p>
@@ -257,15 +338,25 @@ const MahjongRoomPage = () => {
           </div>
         </div>
 
-        <SeatSection
-          seats={data.seats}
-          currentUserId={currentUserId}
-          onSitDown={handleSitDown}
-          onLeaveSeat={handleLeaveSeat}
-          onQuickTransfer={handleQuickTransfer}
-          canInteract={!!currentUser && !mySeat}
-          currentUserSeated={currentUserSeated}
-        />
+        {isFreeMode ? (
+          <MemberSection
+            members={data.members}
+            balances={data.stats.balances}
+            teaFeeTotal={data.stats.teaFeeTotal}
+            currentUserId={currentUserId}
+            onQuickTransfer={handleQuickTransfer}
+          />
+        ) : (
+          <SeatSection
+            seats={data.seats}
+            currentUserId={currentUserId}
+            onSitDown={handleSitDown}
+            onLeaveSeat={handleLeaveSeat}
+            onQuickTransfer={handleQuickTransfer}
+            canInteract={!!currentUser && !mySeat}
+            currentUserSeated={currentUserSeated}
+          />
+        )}
 
         <ScoreBoard
           balances={data.stats.balances}
@@ -276,8 +367,10 @@ const MahjongRoomPage = () => {
 
         <TransactionDialog
           ref={txDialogRef}
-          seats={data.seats}
+          payeeOptions={payeeOptions}
           currentUserId={currentUserId}
+          currentUserName={currentUser?.name ?? ''}
+          blockedMessage={blockedMessage}
           onSubmit={handleSubmitTransaction}
           submitting={submitting}
         />
@@ -287,6 +380,68 @@ const MahjongRoomPage = () => {
           currentUserId={currentUserId}
           onReverse={handleReverseTransaction}
         />
+
+        <Dialog open={modeDialogOpen} onOpenChange={setModeDialogOpen}>
+          <DialogContent
+            style={{
+              backgroundColor: '#0a3d22',
+              border: '1px solid rgba(255,255,255,0.16)',
+              color: '#f0f0e8',
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle style={{ color: '#f2f2ea' }}>房间模式</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-2 py-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start h-auto py-3"
+                disabled={switchingMode}
+                onClick={() => handleSwitchMode('free')}
+                style={{
+                  color: '#f0f0e8',
+                  borderColor: 'rgba(255,255,255,0.2)',
+                }}
+              >
+                <div className="flex flex-col items-start">
+                  <span className="font-semibold">普通模式</span>
+                  <span className="text-xs" style={{ color: '#c9c9bc' }}>
+                    进入房间即可转账（需全部离座才能从坐下模式切回）
+                  </span>
+                </div>
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start h-auto py-3"
+                disabled={switchingMode}
+                onClick={() => handleSwitchMode('seated')}
+                style={{
+                  color: '#f0f0e8',
+                  borderColor: 'rgba(255,255,255,0.2)',
+                }}
+              >
+                <div className="flex flex-col items-start">
+                  <span className="font-semibold">坐下模式</span>
+                  <span className="text-xs" style={{ color: '#c9c9bc' }}>
+                    必须坐下才能转账，打牌的人自己选位置
+                  </span>
+                </div>
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setModeDialogOpen(false)}
+                style={{
+                  color: '#f0f0e8',
+                  borderColor: 'rgba(255,255,255,0.2)',
+                }}
+              >
+                关闭
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

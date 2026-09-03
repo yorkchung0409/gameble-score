@@ -51,8 +51,19 @@ CREATE TABLE IF NOT EXISTS mahjong_rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   room_code VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(200) NOT NULL DEFAULT '麻将房间',
+  mode VARCHAR(20) NOT NULL DEFAULT 'seated',
+  creator_user_id UUID,
   created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS mahjong_room_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID NOT NULL REFERENCES mahjong_rooms(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  joined_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(room_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_mahjong_room_members_room_id ON mahjong_room_members(room_id);
 
 CREATE TABLE IF NOT EXISTS mahjong_seats (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

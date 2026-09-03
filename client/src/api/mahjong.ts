@@ -8,6 +8,8 @@ import type {
   MahjongRoomDetailResponse,
   SitDownRequest,
   LeaveSeatRequest,
+  JoinRoomRequest,
+  UpdateRoomModeRequest,
   CreateTransactionRequest,
   ReverseTransactionRequest,
 } from '@shared/api.interface';
@@ -68,6 +70,28 @@ export async function leaveSeat(
 ): Promise<MahjongRoomDetailResponse> {
   const res = await apiClient.post<MahjongRoomDetailResponse>(
     `${ROOMS_BASE}/${roomCode}/seats/leave`,
+    data,
+  );
+  return res.data;
+}
+
+export async function joinRoom(
+  roomCode: string,
+  data: JoinRoomRequest,
+): Promise<MahjongRoomDetailResponse> {
+  const res = await apiClient.post<MahjongRoomDetailResponse>(
+    `${ROOMS_BASE}/${roomCode}/join`,
+    data,
+  );
+  return res.data;
+}
+
+export async function updateRoomMode(
+  roomCode: string,
+  data: UpdateRoomModeRequest,
+): Promise<MahjongRoomDetailResponse> {
+  const res = await apiClient.post<MahjongRoomDetailResponse>(
+    `${ROOMS_BASE}/${roomCode}/mode`,
     data,
   );
   return res.data;

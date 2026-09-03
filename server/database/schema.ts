@@ -112,9 +112,36 @@ export const mahjongRooms = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     roomCode: varchar('room_code', { length: 50 }).notNull().unique(),
     name: varchar('name', { length: 200 }).notNull().default('麻将房间'),
+    // 房间模式：'free' 普通模式（进房即可转账）/ 'seated' 坐下模式（必须坐下才能转账）
+    mode: varchar('mode', { length: 20 }).notNull().default('seated'),
+    creatorUserId: uuid('creator_user_id'),
     createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [uniqueIndex('mahjong_rooms_room_code_key').on(table.roomCode)],
+);
+
+export const mahjongRoomMembers = pgTable(
+  'mahjong_room_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roomId: uuid('room_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    joinedAt: timestamp('joined_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('mahjong_room_members_room_id_user_id_key').on(table.roomId, table.userId),
+    index('idx_mahjong_room_members_room_id').on(table.roomId),
+    foreignKey({
+      columns: [table.roomId],
+      foreignColumns: [mahjongRooms.id],
+      name: 'mahjong_room_members_room_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: 'mahjong_room_members_user_id_fkey',
+    }).onDelete('cascade'),
+  ],
 );
 
 export const mahjongSeats = pgTable(
@@ -202,6 +229,7 @@ export const userRoomVisits = pgTable(
 export const gamePlayersTable = gamePlayers;
 export const gamesTable = games;
 export const mahjongRoomsTable = mahjongRooms;
+export const mahjongRoomMembersTable = mahjongRoomMembers;
 export const mahjongSeatsTable = mahjongSeats;
 export const mahjongTransactionsTable = mahjongTransactions;
 export const playersTable = players;

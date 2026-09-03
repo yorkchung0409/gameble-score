@@ -18,6 +18,7 @@ import {
   mahjongRooms,
   mahjongSeats,
   mahjongTransactions,
+  mahjongRoomMembers,
 } from '@server/database/schema';
 import { eq, desc, and, inArray } from 'drizzle-orm';
 import type {
@@ -27,6 +28,7 @@ import type {
   CreateMahjongRoomResponse,
   MahjongRoomDetailResponse,
   MahjongSeat,
+  MahjongRoomMember,
   MahjongTransaction,
   CreateTransactionRequest,
 } from '@shared/api.interface';
@@ -41,11 +43,20 @@ function toMahjongUser(row: typeof users.$inferSelect): MahjongUser {
 
 function toMahjongRoom(
   row: typeof mahjongRooms.$inferSelect,
-): { id: string; roomCode: string; name: string; createdAt: string } {
+): {
+  id: string;
+  roomCode: string;
+  name: string;
+  mode: 'seated' | 'free';
+  creatorUserId: string | null;
+  createdAt: string;
+} {
   return {
     id: row.id,
     roomCode: row.roomCode,
     name: row.name,
+    mode: row.mode === 'free' ? 'free' : 'seated',
+    creatorUserId: row.creatorUserId ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -129,6 +140,7 @@ export class MahjongService {
   async createRoom(
     roomCode: string | undefined,
     name: string,
+    creatorUserId?: string,
   ): Promise<CreateMahjongRoomResponse> {
     const normalizedName = (name || '').trim();
     if (!normalizedName) {
@@ -149,8 +161,16 @@ export class MahjongService {
       }
       const [row] = await this.db
         .insert(mahjongRooms)
-        .values({ roomCode: upperCode, name: normalizedName })
+        .values({
+          roomCode: upperCode,
+          name: normalizedName,
+          mode: 'free',
+          creatorUserId: creatorUserId ?? null,
+        })
         .returning();
+      if (creatorUserId) {
+        await this.addMember(row.id, creatorUserId);
+      }
       return { room: toMahjongRoom(row) };
     }
 
@@ -160,8 +180,16 @@ export class MahjongService {
       try {
         const [row] = await this.db
           .insert(mahjongRooms)
-          .values({ roomCode: code, name: normalizedName })
+          .values({
+            roomCode: code,
+            name: normalizedName,
+            mode: 'free',
+            creatorUserId: creatorUserId ?? null,
+          })
           .returning();
+        if (creatorUserId) {
+          await this.addMember(row.id, creatorUserId);
+        }
         return { room: toMahjongRoom(row) };
       } catch (error) {
         const pgCode = extractPostgresErrorCode(error);
@@ -253,6 +281,33 @@ export class MahjongService {
       }
     }
 
+    // 房间成员（进房即登记），成员姓名并入 userNameMap
+    const memberRows = await this.db
+      .select()
+      .from(mahjongRoomMembers)
+      .where(eq(mahjongRoomMembers.roomId, roomId))
+      .orderBy(mahjongRoomMembers.joinedAt);
+    const missingMemberUserIds: string[] = [];
+    for (const m of memberRows) {
+      if (!userNameMap.has(m.userId)) {
+        missingMemberUserIds.push(m.userId);
+      }
+    }
+    if (missingMemberUserIds.length > 0) {
+      const memberUsers = await this.db
+        .select({ id: users.id, name: users.name })
+        .from(users)
+        .where(inArray(users.id, missingMemberUserIds));
+      for (const u of memberUsers) {
+        userNameMap.set(u.id, u.name);
+      }
+    }
+    const members: MahjongRoomMember[] = memberRows.map((m) => ({
+      userId: m.userId,
+      userName: userNameMap.get(m.userId) ?? '',
+      joinedAt: m.joinedAt.toISOString(),
+    }));
+
     const transactions: MahjongTransaction[] = txRows.map((tx) => ({
       id: tx.id,
       payerId: tx.payerId,
@@ -321,6 +376,7 @@ export class MahjongService {
     return {
       room,
       seats,
+      members,
       transactions,
       stats: {
         balances,
@@ -424,6 +480,93 @@ export class MahjongService {
     return this.getRoomDetail(roomCode);
   }
 
+  // ---------- 成员 / 模式相关 ----------
+
+  /** 进入房间即登记为成员（幂等） */
+  async joinRoom(
+    roomCode: string,
+    userId: string,
+  ): Promise<MahjongRoomDetailResponse> {
+    const roomRows = await this.db
+      .select({ id: mahjongRooms.id })
+      .from(mahjongRooms)
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
+    if (roomRows.length === 0) {
+      throw new NotFoundException('房间不存在');
+    }
+    const roomId = roomRows[0].id;
+
+    const userRows = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (userRows.length === 0) {
+      throw new BadRequestException('用户不存在');
+    }
+
+    await this.addMember(roomId, userId);
+    return this.getRoomDetail(roomCode);
+  }
+
+  /** 房主切换房间模式 */
+  async updateMode(
+    roomCode: string,
+    mode: 'seated' | 'free',
+    operatorUserId: string,
+  ): Promise<MahjongRoomDetailResponse> {
+    if (mode !== 'seated' && mode !== 'free') {
+      throw new BadRequestException('模式无效');
+    }
+    const roomRows = await this.db
+      .select({
+        id: mahjongRooms.id,
+        creatorUserId: mahjongRooms.creatorUserId,
+      })
+      .from(mahjongRooms)
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
+    if (roomRows.length === 0) {
+      throw new NotFoundException('房间不存在');
+    }
+    const roomRow = roomRows[0];
+
+    // 只有房主能切换模式
+    if (!roomRow.creatorUserId || roomRow.creatorUserId !== operatorUserId) {
+      throw new ForbiddenException('只有房主可以切换房间模式');
+    }
+
+    // 坐下模式 -> 普通模式：需所有玩家离座
+    if (mode === 'free') {
+      const seatedCount = await this.db
+        .select({ id: mahjongSeats.id })
+        .from(mahjongSeats)
+        .where(eq(mahjongSeats.roomId, roomRow.id));
+      if (seatedCount.length > 0) {
+        throw new BadRequestException(
+          '有玩家正在座位上，需全部离座后才能切换为普通模式',
+        );
+      }
+    }
+
+    await this.db
+      .update(mahjongRooms)
+      .set({ mode })
+      .where(eq(mahjongRooms.id, roomRow.id));
+
+    return this.getRoomDetail(roomCode);
+  }
+
+  /** 幂等登记房间成员 */
+  private async addMember(roomId: string, userId: string): Promise<void> {
+    try {
+      await this.db
+        .insert(mahjongRoomMembers)
+        .values({ roomId, userId })
+        .onConflictDoNothing();
+    } catch (error) {
+      this.logger.debug('加入成员幂等处理', JSON.stringify(error));
+    }
+  }
+
   // ---------- 转账记录相关 ----------
 
   async createTransaction(
@@ -438,23 +581,46 @@ export class MahjongService {
     }
 
     const roomRows = await this.db
-      .select({ id: mahjongRooms.id })
+      .select({ id: mahjongRooms.id, mode: mahjongRooms.mode })
       .from(mahjongRooms)
       .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
     const roomId = roomRows[0].id;
+    const roomMode = roomRows[0].mode === 'free' ? 'free' : 'seated';
 
-    // 校验付款方必须是座位上的人
-    const payerSeat = await this.db
-      .select({ id: mahjongSeats.id })
-      .from(mahjongSeats)
-      .where(
-        and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, dto.payerId)),
-      );
-    if (payerSeat.length === 0) {
-      throw new BadRequestException('付款方不在当前房间座位上');
+    const payerSeat =
+      (await this.db
+        .select({ id: mahjongSeats.id })
+        .from(mahjongSeats)
+        .where(
+          and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, dto.payerId)),
+        )).length > 0;
+
+    if (roomMode === 'seated') {
+      // 坐下模式：付款方必须在座位上
+      if (!payerSeat) {
+        throw new BadRequestException('付款方不在当前房间座位上');
+      }
+    } else {
+      // 普通模式：付款方必须是房间成员，且只能以自己身份操作
+      if (dto.operatorUserId !== dto.payerId) {
+        throw new ForbiddenException('普通模式下只能以自己身份转账');
+      }
+      const payerMember =
+        (await this.db
+          .select({ id: mahjongRoomMembers.id })
+          .from(mahjongRoomMembers)
+          .where(
+            and(
+              eq(mahjongRoomMembers.roomId, roomId),
+              eq(mahjongRoomMembers.userId, dto.payerId),
+            ),
+          )).length > 0;
+      if (!payerMember) {
+        throw new BadRequestException('付款方不是本房间成员');
+      }
     }
 
     let payeeIdValue: string | null = null;
@@ -466,15 +632,32 @@ export class MahjongService {
       if (dto.payeeId === dto.payerId) {
         throw new BadRequestException('付款方和收款方不能是同一人');
       }
-      // 校验收款方必须是座位上的人
-      const payeeSeat = await this.db
-        .select({ id: mahjongSeats.id })
-        .from(mahjongSeats)
-        .where(
-          and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, dto.payeeId)),
-        );
-      if (payeeSeat.length === 0) {
-        throw new BadRequestException('收款方不在当前房间座位上');
+      if (roomMode === 'seated') {
+        // 坐下模式：收款方必须在座位上
+        const payeeSeat = await this.db
+          .select({ id: mahjongSeats.id })
+          .from(mahjongSeats)
+          .where(
+            and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, dto.payeeId)),
+          );
+        if (payeeSeat.length === 0) {
+          throw new BadRequestException('收款方不在当前房间座位上');
+        }
+      } else {
+        // 普通模式：收款方必须是房间成员
+        const payeeMember =
+          (await this.db
+            .select({ id: mahjongRoomMembers.id })
+            .from(mahjongRoomMembers)
+            .where(
+              and(
+                eq(mahjongRoomMembers.roomId, roomId),
+                eq(mahjongRoomMembers.userId, dto.payeeId),
+              ),
+            )).length > 0;
+        if (!payeeMember) {
+          throw new BadRequestException('收款方不是本房间成员');
+        }
       }
       payeeIdValue = dto.payeeId;
     }

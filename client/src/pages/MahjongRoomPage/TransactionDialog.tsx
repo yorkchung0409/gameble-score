@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogTrigger,
 } from '@client/src/components/ui/dialog';
 import {
   Select,
@@ -18,28 +17,37 @@ import {
   SelectContent,
   SelectItem,
 } from '@client/src/components/ui/select';
-import type {
-  MahjongSeat,
-  CreateTransactionRequest,
-} from '@shared/api.interface';
+import type { CreateTransactionRequest } from '@shared/api.interface';
+
+export interface PayeeOption {
+  id: string;
+  name: string;
+}
 
 export interface TransactionDialogHandle {
   open: (preselectedPayeeId?: string) => void;
 }
 
 interface TransactionDialogProps {
-  seats: MahjongSeat[];
+  payeeOptions: PayeeOption[];
   currentUserId: string;
+  currentUserName: string;
+  /** 坐下模式且无人入座时的提示，有值时阻止转账弹窗 */
+  blockedMessage?: string;
   onSubmit: (payload: CreateTransactionRequest) => Promise<void>;
   submitting: boolean;
 }
 
-const TransactionDialog = forwardRef<
-  TransactionDialogHandle,
-  TransactionDialogProps
->(
+const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogProps>(
   (
-    { seats, currentUserId, onSubmit, submitting }: TransactionDialogProps,
+    {
+      payeeOptions,
+      currentUserId,
+      currentUserName,
+      blockedMessage,
+      onSubmit,
+      submitting,
+    }: TransactionDialogProps,
     ref,
   ) => {
     const [open, setOpen] = useState(false);
@@ -47,29 +55,23 @@ const TransactionDialog = forwardRef<
     const [amount, setAmount] = useState('');
     const [remark, setRemark] = useState('');
 
-    const currentSeat = seats.find(
-      (s: MahjongSeat) => s.userId === currentUserId,
-    );
+    const canOpen = () => {
+      if (blockedMessage) {
+        toast.error(blockedMessage);
+        return false;
+      }
+      return true;
+    };
 
     const getDefaultPayee = (): string => {
-      const firstOther = seats.find(
-        (s: MahjongSeat) => s.userId !== currentUserId,
-      );
-      if (firstOther) return firstOther.userId;
+      if (payeeOptions.length > 0) return payeeOptions[0].id;
       return 'tea_fee';
     };
 
     useImperativeHandle(ref, () => ({
       open: (preselectedPayeeId?: string) => {
-        if (seats.length === 0) {
-          toast.error('当前还没有入座的玩家');
-          return;
-        }
-        if (preselectedPayeeId) {
-          setPayeeValue(preselectedPayeeId);
-        } else {
-          setPayeeValue(getDefaultPayee());
-        }
+        if (!canOpen()) return;
+        setPayeeValue(preselectedPayeeId ?? getDefaultPayee());
         setAmount('');
         setRemark('');
         setOpen(true);
@@ -78,21 +80,18 @@ const TransactionDialog = forwardRef<
 
     useEffect(() => {
       if (open) {
-        // 如果当前收款方已不在座位列表且不是茶水费，重置默认
         const isTeaFee = payeeValue === 'tea_fee';
         const stillExists =
-          isTeaFee || seats.some((s: MahjongSeat) => s.userId === payeeValue);
+          isTeaFee || payeeOptions.some((o) => o.id === payeeValue);
         if (!stillExists) {
           setPayeeValue(getDefaultPayee());
         }
       }
-    }, [open, seats]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, payeeOptions]);
 
     const handleTriggerClick = () => {
-      if (seats.length === 0) {
-        toast.error('当前还没有入座的玩家');
-        return;
-      }
+      if (!canOpen()) return;
       setPayeeValue(getDefaultPayee());
       setAmount('');
       setRemark('');
@@ -126,25 +125,19 @@ const TransactionDialog = forwardRef<
       setOpen(false);
     };
 
-    const payerDisplay = currentSeat
-      ? `${currentSeat.userName}（我）`
-      : '--';
-
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button
-            className="w-full sm:w-auto font-semibold mb-6"
-            style={{
-              backgroundColor: '#d4af37',
-              color: '#07301a',
-            }}
-            onClick={handleTriggerClick}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            手动转账
-          </Button>
-        </DialogTrigger>
+        <Button
+          className="w-full sm:w-auto font-semibold mb-6"
+          style={{
+            backgroundColor: '#d4af37',
+            color: '#07301a',
+          }}
+          onClick={handleTriggerClick}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          手动转账
+        </Button>
         <DialogContent
           style={{
             backgroundColor: '#0a3d22',
@@ -174,7 +167,7 @@ const TransactionDialog = forwardRef<
                 }}
               >
                 <User className="w-4 h-4" />
-                {payerDisplay}
+                {currentUserName ? `${currentUserName}（我）` : '--'}
               </div>
             </div>
             <div>
@@ -195,13 +188,13 @@ const TransactionDialog = forwardRef<
                     color: '#f0f0e8',
                   }}
                 >
-                  {seats.map((s: MahjongSeat) => (
+                  {payeeOptions.map((o) => (
                     <SelectItem
-                      key={s.userId}
-                      value={s.userId}
+                      key={o.id}
+                      value={o.id}
                       style={{ color: '#f0f0e8' }}
                     >
-                      {s.userName}
+                      {o.name}
                     </SelectItem>
                   ))}
                   <SelectItem value="tea_fee" style={{ color: '#f0f0e8' }}>

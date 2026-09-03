@@ -36,6 +36,7 @@ const MahjongPanel = () => {
       const res = await mahjongApi.createRoom({
         name: roomName.trim(),
         roomCode: roomCodeInput.trim() || undefined,
+        creatorUserId: currentUser?.id,
       });
       toast.success('房间创建成功');
       navigate(`/mahjong/${res.room.roomCode}`);
