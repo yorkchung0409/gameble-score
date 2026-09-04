@@ -6,10 +6,11 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import {
   generateRoomCode,
-  extractPostgresErrorCode,
+  isUniqueConstraintError,
   normalizeRoomCode,
   parseNonNegativeAmount,
   parseCalendarDate,
@@ -80,10 +81,11 @@ export class PokerService {
       if (existing.length > 0) {
         throw new ConflictException('房间码已存在');
       }
-      const [row] = await this.db
-          .insert(rooms)
-          .values({ roomCode: upperCode, roomName: normalizedName, gameType })
-          .returning();
+      const id = randomUUID();
+      await this.db
+        .insert(rooms)
+        .values({ id, roomCode: upperCode, roomName: normalizedName, gameType });
+      const [row] = await this.db.select().from(rooms).where(eq(rooms.id, id));
       return { room: toRoom(row) };
     }
 
@@ -91,14 +93,14 @@ export class PokerService {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const code = generateRoomCode();
       try {
-        const [row] = await this.db
-            .insert(rooms)
-            .values({ roomCode: code, roomName: normalizedName, gameType })
-            .returning();
+        const id = randomUUID();
+        await this.db
+          .insert(rooms)
+          .values({ id, roomCode: code, roomName: normalizedName, gameType });
+        const [row] = await this.db.select().from(rooms).where(eq(rooms.id, id));
         return { room: toRoom(row) };
       } catch (error) {
-        const pgCode = extractPostgresErrorCode(error);
-        if (pgCode === '23505') {
+        if (isUniqueConstraintError(error)) {
           continue;
         }
         this.logger.error('创建房间失败', JSON.stringify(error));
@@ -236,11 +238,14 @@ export class PokerService {
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
-    const [updated] = await this.db
+    await this.db
       .update(rooms)
       .set({ roomName: normalizedName, updatedAt: new Date() })
-      .where(eq(rooms.id, roomRows[0].id))
-      .returning();
+      .where(eq(rooms.id, roomRows[0].id));
+    const [updated] = await this.db
+      .select()
+      .from(rooms)
+      .where(eq(rooms.id, roomRows[0].id));
     return { room: toRoom(updated) };
   }
 
@@ -259,10 +264,11 @@ export class PokerService {
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
-    const [row] = await this.db
+    const id = randomUUID();
+    await this.db
       .insert(players)
-      .values({ roomId: roomRows[0].id, name: normalizedName })
-      .returning();
+      .values({ id, roomId: roomRows[0].id, name: normalizedName });
+    const [row] = await this.db.select().from(players).where(eq(players.id, id));
     await this.touchRoom(roomRows[0].id);
     return toPlayer(row);
   }
@@ -283,13 +289,16 @@ export class PokerService {
     if (historyRows.length > 0) {
       throw new BadRequestException('该人员已有历史牌局记录，无法删除');
     }
-    const deleted = await this.db
-      .delete(players)
-      .where(and(eq(players.id, playerId), eq(players.roomId, roomRows[0].id)))
-      .returning({ id: players.id });
-    if (deleted.length === 0) {
+    const targetPlayers = await this.db
+      .select({ id: players.id })
+      .from(players)
+      .where(and(eq(players.id, playerId), eq(players.roomId, roomRows[0].id)));
+    if (targetPlayers.length === 0) {
       throw new NotFoundException('人员不存在');
     }
+    await this.db
+      .delete(players)
+      .where(and(eq(players.id, playerId), eq(players.roomId, roomRows[0].id)));
     await this.touchRoom(roomRows[0].id);
   }
 
@@ -335,27 +344,24 @@ export class PokerService {
     }
 
     const result = await this.db.transaction(async (tx) => {
-      const [gameRow] = await tx
+      const gameId = randomUUID();
+      await tx
         .insert(games)
-        .values({ roomId, gameDate })
-        .returning();
+        .values({ id: gameId, roomId, gameDate });
 
-      const gpRows = await tx
-        .insert(gamePlayers)
-        .values(
-          uniquePlayers.map((p) => {
-            const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
-            const balance = parseNonNegativeAmount(p.balance, '结余');
-            return {
-              gameId: gameRow.id,
-              playerId: p.playerId,
-              buyIn: String(buyIn),
-              balance: String(balance),
-              netProfit: fromCents(toCents(balance) - toCents(buyIn)),
-            };
-          }),
-        )
-        .returning();
+      const gpRows = uniquePlayers.map((p) => {
+        const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
+        const balance = parseNonNegativeAmount(p.balance, '结余');
+        return {
+          id: randomUUID(),
+          gameId,
+          playerId: p.playerId,
+          buyIn: String(buyIn),
+          balance: String(balance),
+          netProfit: fromCents(toCents(balance) - toCents(buyIn)),
+        };
+      });
+      await tx.insert(gamePlayers).values(gpRows);
 
       const playerIds = uniquePlayers.map((p) => p.playerId);
       const playerListRows = await tx
@@ -383,9 +389,9 @@ export class PokerService {
       }
 
       const game: Game = {
-        id: gameRow.id,
-        roomId: gameRow.roomId,
-        gameDate: gameRow.gameDate,
+        id: gameId,
+        roomId,
+        gameDate,
         players: gamePlayerList,
         totalBuyIn: fromCents(gameBuyInCents),
         playerCount: gamePlayerList.length,
@@ -459,11 +465,8 @@ export class PokerService {
       }
       let gameRow = gameRows[0];
       if (Object.keys(patch).length > 0) {
-        const [updated] = await tx
-          .update(games)
-          .set(patch)
-          .where(eq(games.id, gameId))
-          .returning();
+        await tx.update(games).set(patch).where(eq(games.id, gameId));
+        const [updated] = await tx.select().from(games).where(eq(games.id, gameId));
         gameRow = updated;
       }
 
@@ -472,22 +475,19 @@ export class PokerService {
       if (dto.players !== undefined) {
         await tx.delete(gamePlayers).where(eq(gamePlayers.gameId, gameId));
 
-        const gpRows = await tx
-          .insert(gamePlayers)
-          .values(
-            uniquePlayers.map((p) => {
-              const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
-              const balance = parseNonNegativeAmount(p.balance, '结余');
-              return {
-                gameId,
-                playerId: p.playerId,
-                buyIn: String(buyIn),
-                balance: String(balance),
-              netProfit: fromCents(toCents(balance) - toCents(buyIn)),
-              };
-            }),
-          )
-          .returning();
+        const gpRows = uniquePlayers.map((p) => {
+          const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
+          const balance = parseNonNegativeAmount(p.balance, '结余');
+          return {
+            id: randomUUID(),
+            gameId,
+            playerId: p.playerId,
+            buyIn: String(buyIn),
+            balance: String(balance),
+            netProfit: fromCents(toCents(balance) - toCents(buyIn)),
+          };
+        });
+        await tx.insert(gamePlayers).values(gpRows);
 
         const playerIds = uniquePlayers.map((p) => p.playerId);
         const playerListRows = await tx
@@ -554,13 +554,16 @@ export class PokerService {
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
-    const deleted = await this.db
-      .delete(games)
-      .where(and(eq(games.id, gameId), eq(games.roomId, roomRows[0].id)))
-      .returning({ id: games.id });
-    if (deleted.length === 0) {
+    const targets = await this.db
+      .select({ id: games.id })
+      .from(games)
+      .where(and(eq(games.id, gameId), eq(games.roomId, roomRows[0].id)));
+    if (targets.length === 0) {
       throw new NotFoundException('牌局不存在');
     }
+    await this.db
+      .delete(games)
+      .where(and(eq(games.id, gameId), eq(games.roomId, roomRows[0].id)));
     await this.touchRoom(roomRows[0].id);
   }
 }

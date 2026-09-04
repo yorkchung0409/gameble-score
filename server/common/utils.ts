@@ -14,12 +14,12 @@ export function generateRoomCode(): string {
   return code;
 }
 
-/** 从嵌套错误对象中提取 Postgres 错误码（如 23505 唯一冲突） */
-export function extractPostgresErrorCode(error: unknown): string | undefined {
+/** 从嵌套驱动错误中提取数据库错误码。 */
+export function extractDatabaseErrorCode(error: unknown): string | number | undefined {
   let current: unknown = error;
   for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth += 1) {
     const { code, cause } = current as { code?: unknown; cause?: unknown };
-    if (typeof code === 'string') return code;
+    if (typeof code === 'string' || typeof code === 'number') return code;
     current = cause;
   }
   return undefined;
@@ -28,6 +28,12 @@ export function extractPostgresErrorCode(error: unknown): string | undefined {
 /** 规范化房间码：转大写并去空格 */
 export function normalizeRoomCode(roomCode: string): string {
   return (roomCode || '').trim().toUpperCase();
+}
+
+/** 兼容数据库驱动的唯一约束冲突判定。 */
+export function isUniqueConstraintError(error: unknown): boolean {
+  const code = extractDatabaseErrorCode(error);
+  return code === '23505' || code === 'ER_DUP_ENTRY' || code === 1062;
 }
 
 /** 严格校验 YYYY-MM-DD，避免由数据库抛出不稳定的日期格式错误。 */

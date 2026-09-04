@@ -44,21 +44,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           timestamp: Date.now(),
         },
       };
-    } else if (
-      typeof exception === 'object' &&
-      exception !== null &&
-      (exception as { code?: unknown }).code === '22P02'
-    ) {
-      // Postgres invalid_text_representation：路径/查询参数与列类型不匹配（最常见是非法 UUID）
-      // 与「合法 UUID 但记录不存在」走同一条 not-found 语义，避免 500 噪声
-      httpStatus = HttpStatus.NOT_FOUND;
-      errorResponse = {
-        error: {
-          code: ResponseCode.NOT_FOUND,
-          message: '资源不存在',
-          timestamp: Date.now(),
-        },
-      };
     } else {
       // 未知异常（生产环境不向客户端泄露内部堆栈）
       httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;

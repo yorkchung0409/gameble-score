@@ -1,252 +1,191 @@
-import { sql } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
 import {
   date,
+  decimal,
   foreignKey,
   index,
-  numeric,
-  pgTable,
+  mysqlTable,
   smallint,
-  uniqueIndex,
-  uuid,
-  varchar,
   timestamp,
-} from 'drizzle-orm/pg-core';
+  uniqueIndex,
+  varchar,
+} from 'drizzle-orm/mysql-core';
 
-// ========== 德州模块 ==========
+const id = () =>
+  varchar('id', { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => randomUUID());
 
-export const rooms = pgTable(
+export const rooms = mysqlTable(
   'rooms',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: id(),
     roomCode: varchar('room_code', { length: 50 }).notNull().unique(),
     roomName: varchar('room_name', { length: 200 }).notNull().default('牌局记账'),
     gameType: varchar('game_type', { length: 20 }).notNull().default('texas'),
-    createdAt: timestamp('created_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: timestamp('updated_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { fsp: 3 }).notNull().defaultNow().onUpdateNow(),
   },
   (table) => [uniqueIndex('rooms_room_code_key').on(table.roomCode)],
 );
 
-export const players = pgTable(
+export const players = mysqlTable(
   'players',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    roomId: uuid('room_id').notNull(),
+    id: id(),
+    roomId: varchar('room_id', { length: 36 }).notNull(),
     name: varchar('name', { length: 100 }).notNull(),
-    createdAt: timestamp('created_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
   },
   (table) => [
     index('idx_players_room_id').on(table.roomId),
-    foreignKey({
-      columns: [table.roomId],
-      foreignColumns: [rooms.id],
-      name: 'players_room_id_fkey',
-    }).onDelete('cascade'),
+    foreignKey({ columns: [table.roomId], foreignColumns: [rooms.id], name: 'players_room_id_fkey' }).onDelete('cascade'),
   ],
 );
 
-export const games = pgTable(
+export const games = mysqlTable(
   'games',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    roomId: uuid('room_id').notNull(),
-    gameDate: date('game_date').notNull(),
-    createdAt: timestamp('created_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    id: id(),
+    roomId: varchar('room_id', { length: 36 }).notNull(),
+    gameDate: date('game_date', { mode: 'string' }).notNull(),
+    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
   },
   (table) => [
     index('idx_games_room_id').on(table.roomId),
-    foreignKey({
-      columns: [table.roomId],
-      foreignColumns: [rooms.id],
-      name: 'games_room_id_fkey',
-    }).onDelete('cascade'),
+    foreignKey({ columns: [table.roomId], foreignColumns: [rooms.id], name: 'games_room_id_fkey' }).onDelete('cascade'),
   ],
 );
 
-export const gamePlayers = pgTable(
+export const gamePlayers = mysqlTable(
   'game_players',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    gameId: uuid('game_id').notNull(),
-    playerId: uuid('player_id').notNull(),
-    buyIn: numeric('buy_in').notNull().default('0'),
-    balance: numeric('balance').notNull().default('0'),
-    netProfit: numeric('net_profit').notNull().default('0'),
-    createdAt: timestamp('created_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    id: id(),
+    gameId: varchar('game_id', { length: 36 }).notNull(),
+    playerId: varchar('player_id', { length: 36 }).notNull(),
+    buyIn: decimal('buy_in', { precision: 14, scale: 2 }).notNull().default('0'),
+    balance: decimal('balance', { precision: 14, scale: 2 }).notNull().default('0'),
+    netProfit: decimal('net_profit', { precision: 14, scale: 2 }).notNull().default('0'),
+    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('game_players_game_id_player_id_key').on(table.gameId, table.playerId),
     index('idx_game_players_game_id').on(table.gameId),
     index('idx_game_players_player_id').on(table.playerId),
-    foreignKey({
-      columns: [table.gameId],
-      foreignColumns: [games.id],
-      name: 'game_players_game_id_fkey',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [table.playerId],
-      foreignColumns: [players.id],
-      name: 'game_players_player_id_fkey',
-    }).onDelete('cascade'),
+    foreignKey({ columns: [table.gameId], foreignColumns: [games.id], name: 'game_players_game_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.playerId], foreignColumns: [players.id], name: 'game_players_player_id_fkey' }).onDelete('cascade'),
   ],
 );
 
-// ========== 麻将模块 ==========
-
-export const users = pgTable(
+export const users = mysqlTable(
   'users',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: id(),
     name: varchar('name', { length: 100 }).notNull(),
     deviceId: varchar('device_id', { length: 100 }).notNull().unique(),
-    createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
   },
-  (table) => [
-    uniqueIndex('users_device_id_key').on(table.deviceId),
-  ],
+  (table) => [uniqueIndex('users_device_id_key').on(table.deviceId)],
 );
 
-/**
- * 登录身份与展示资料分离。Web 继续使用设备 ID；小程序使用服务端换取的 openid。
- * 后续接入其他平台时只需增加 provider，不必修改业务表的用户外键。
- */
-export const userIdentities = pgTable(
+export const userIdentities = mysqlTable(
   'user_identities',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id').notNull(),
+    id: id(),
+    userId: varchar('user_id', { length: 36 }).notNull(),
     provider: varchar('provider', { length: 30 }).notNull(),
     providerSubject: varchar('provider_subject', { length: 128 }).notNull(),
-    createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('user_identities_provider_subject_key').on(
-      table.provider,
-      table.providerSubject,
-    ),
+    uniqueIndex('user_identities_provider_subject_key').on(table.provider, table.providerSubject),
     index('idx_user_identities_user_id').on(table.userId),
-    foreignKey({
-      columns: [table.userId],
-      foreignColumns: [users.id],
-      name: 'user_identities_user_id_fkey',
-    }).onDelete('cascade'),
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'user_identities_user_id_fkey' }).onDelete('cascade'),
   ],
 );
 
-export const mahjongRooms = pgTable(
+export const mahjongRooms = mysqlTable(
   'mahjong_rooms',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: id(),
     roomCode: varchar('room_code', { length: 50 }).notNull().unique(),
     name: varchar('name', { length: 200 }).notNull().default('麻将房间'),
-    // 房间模式：'free' 普通模式（进房即可转账）/ 'seated' 坐下模式（必须坐下才能转账）
     mode: varchar('mode', { length: 20 }).notNull().default('seated'),
-    creatorUserId: uuid('creator_user_id'),
-    createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
-    // 解散时间（自动解散归档），非空表示房间已解散
-    dissolvedAt: timestamp('dissolved_at', { precision: 6 }),
+    creatorUserId: varchar('creator_user_id', { length: 36 }),
+    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
+    dissolvedAt: timestamp('dissolved_at', { fsp: 6 }),
   },
   (table) => [uniqueIndex('mahjong_rooms_room_code_key').on(table.roomCode)],
 );
 
-export const mahjongRoomMembers = pgTable(
+export const mahjongRoomMembers = mysqlTable(
   'mahjong_room_members',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    roomId: uuid('room_id').notNull(),
-    userId: uuid('user_id').notNull(),
-    joinedAt: timestamp('joined_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    id: id(),
+    roomId: varchar('room_id', { length: 36 }).notNull(),
+    userId: varchar('user_id', { length: 36 }).notNull(),
+    joinedAt: timestamp('joined_at', { fsp: 6 }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('mahjong_room_members_room_id_user_id_key').on(table.roomId, table.userId),
     index('idx_mahjong_room_members_room_id').on(table.roomId),
-    foreignKey({
-      columns: [table.roomId],
-      foreignColumns: [mahjongRooms.id],
-      name: 'mahjong_room_members_room_id_fkey',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [table.userId],
-      foreignColumns: [users.id],
-      name: 'mahjong_room_members_user_id_fkey',
-    }).onDelete('cascade'),
+    foreignKey({ columns: [table.roomId], foreignColumns: [mahjongRooms.id], name: 'mahjong_room_members_room_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'mahjong_room_members_user_id_fkey' }).onDelete('cascade'),
   ],
 );
 
-export const mahjongSeats = pgTable(
+export const mahjongSeats = mysqlTable(
   'mahjong_seats',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    roomId: uuid('room_id').notNull(),
+    id: id(),
+    roomId: varchar('room_id', { length: 36 }).notNull(),
     seatIndex: smallint('seat_index').notNull(),
-    userId: uuid('user_id').notNull(),
-    joinedAt: timestamp('joined_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    userId: varchar('user_id', { length: 36 }).notNull(),
+    joinedAt: timestamp('joined_at', { fsp: 6 }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('mahjong_seats_room_id_seat_index_key').on(table.roomId, table.seatIndex),
     uniqueIndex('mahjong_seats_room_id_user_id_key').on(table.roomId, table.userId),
     index('idx_mahjong_seats_room_id').on(table.roomId),
-    foreignKey({
-      columns: [table.roomId],
-      foreignColumns: [mahjongRooms.id],
-      name: 'mahjong_seats_room_id_fkey',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [table.userId],
-      foreignColumns: [users.id],
-      name: 'mahjong_seats_user_id_fkey',
-    }).onDelete('cascade'),
+    foreignKey({ columns: [table.roomId], foreignColumns: [mahjongRooms.id], name: 'mahjong_seats_room_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'mahjong_seats_user_id_fkey' }).onDelete('cascade'),
   ],
 );
 
-export const mahjongTransactions = pgTable(
+export const mahjongTransactions = mysqlTable(
   'mahjong_transactions',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    roomId: uuid('room_id').notNull(),
-    payerId: uuid('payer_id').notNull(),
+    id: id(),
+    roomId: varchar('room_id', { length: 36 }).notNull(),
+    payerId: varchar('payer_id', { length: 36 }).notNull(),
     payeeType: varchar('payee_type', { length: 20 }).notNull(),
-    payeeId: uuid('payee_id'),
-    amount: numeric('amount').notNull().default('0'),
+    payeeId: varchar('payee_id', { length: 36 }),
+    amount: decimal('amount', { precision: 14, scale: 2 }).notNull().default('0'),
     remark: varchar('remark', { length: 500 }),
-    reversalOf: uuid('reversal_of'),
-    createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    reversalOf: varchar('reversal_of', { length: 36 }),
+    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('mahjong_transactions_reversal_of_key').on(table.reversalOf),
     index('idx_mahjong_transactions_room_id').on(table.roomId),
-    foreignKey({
-      columns: [table.roomId],
-      foreignColumns: [mahjongRooms.id],
-      name: 'mahjong_transactions_room_id_fkey',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [table.payerId],
-      foreignColumns: [users.id],
-      name: 'mahjong_transactions_payer_id_fkey',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [table.payeeId],
-      foreignColumns: [users.id],
-      name: 'mahjong_transactions_payee_id_fkey',
-    }).onDelete('cascade'),
+    foreignKey({ columns: [table.roomId], foreignColumns: [mahjongRooms.id], name: 'mahjong_transactions_room_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.payerId], foreignColumns: [users.id], name: 'mahjong_transactions_payer_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.payeeId], foreignColumns: [users.id], name: 'mahjong_transactions_payee_id_fkey' }).onDelete('cascade'),
   ],
 );
 
-// ========== 房间访问历史 ==========
-
-export const userRoomVisits = pgTable(
+export const userRoomVisits = mysqlTable(
   'user_room_visits',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: id(),
     deviceId: varchar('device_id', { length: 100 }).notNull(),
-    userId: uuid('user_id'),
-    roomId: uuid('room_id').notNull(),
+    userId: varchar('user_id', { length: 36 }),
+    roomId: varchar('room_id', { length: 36 }).notNull(),
     gameType: varchar('game_type', { length: 20 }).notNull().default('texas'),
     roomCode: varchar('room_code', { length: 50 }).notNull(),
     roomName: varchar('room_name', { length: 200 }).notNull(),
-    lastVisitedAt: timestamp('last_visited_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
-    createdAt: timestamp('created_at', { precision: 3 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastVisitedAt: timestamp('last_visited_at', { fsp: 3 }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('user_room_visits_device_room_game_key').on(table.deviceId, table.roomId, table.gameType),
@@ -255,7 +194,6 @@ export const userRoomVisits = pgTable(
   ],
 );
 
-// table aliases
 export const gamePlayersTable = gamePlayers;
 export const gamesTable = games;
 export const mahjongRoomsTable = mahjongRooms;

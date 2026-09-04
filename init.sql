@@ -1,119 +1,125 @@
--- 牌局记账应用数据库初始化脚本
--- PostgreSQL
-
--- 德州模块
 CREATE TABLE IF NOT EXISTS rooms (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id CHAR(36) PRIMARY KEY,
   room_code VARCHAR(50) NOT NULL UNIQUE,
   room_name VARCHAR(200) NOT NULL DEFAULT '牌局记账',
   game_type VARCHAR(20) NOT NULL DEFAULT 'texas',
-  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS players (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  room_id CHAR(36) NOT NULL,
   name VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_players_room_id ON players(room_id);
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  CONSTRAINT players_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+  INDEX idx_players_room_id (room_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS games (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  room_id CHAR(36) NOT NULL,
   game_date DATE NOT NULL,
-  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_games_room_id ON games(room_id);
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  CONSTRAINT games_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+  INDEX idx_games_room_id (room_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS game_players (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-  buy_in NUMERIC NOT NULL DEFAULT '0',
-  balance NUMERIC NOT NULL DEFAULT '0',
-  net_profit NUMERIC NOT NULL DEFAULT '0',
-  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_game_players_game_id ON game_players(game_id);
-CREATE INDEX IF NOT EXISTS idx_game_players_player_id ON game_players(player_id);
-CREATE UNIQUE INDEX IF NOT EXISTS game_players_game_id_player_id_key ON game_players(game_id, player_id);
+  id CHAR(36) PRIMARY KEY,
+  game_id CHAR(36) NOT NULL,
+  player_id CHAR(36) NOT NULL,
+  buy_in DECIMAL(14,2) NOT NULL DEFAULT 0,
+  balance DECIMAL(14,2) NOT NULL DEFAULT 0,
+  net_profit DECIMAL(14,2) NOT NULL DEFAULT 0,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  CONSTRAINT game_players_game_id_fkey FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+  CONSTRAINT game_players_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+  UNIQUE KEY game_players_game_id_player_id_key (game_id, player_id),
+  INDEX idx_game_players_game_id (game_id),
+  INDEX idx_game_players_player_id (player_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 麻将模块
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id CHAR(36) PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   device_id VARCHAR(100) NOT NULL UNIQUE,
-  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS user_identities (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
   provider VARCHAR(30) NOT NULL,
   provider_subject VARCHAR(128) NOT NULL,
-  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(provider, provider_subject)
-);
-CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id);
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT user_identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY user_identities_provider_subject_key (provider, provider_subject),
+  INDEX idx_user_identities_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS mahjong_rooms (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id CHAR(36) PRIMARY KEY,
   room_code VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(200) NOT NULL DEFAULT '麻将房间',
   mode VARCHAR(20) NOT NULL DEFAULT 'seated',
-  creator_user_id UUID,
-  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  dissolved_at TIMESTAMP(6)
-);
+  creator_user_id CHAR(36) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  dissolved_at DATETIME(6) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS mahjong_room_members (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id UUID NOT NULL REFERENCES mahjong_rooms(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  joined_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(room_id, user_id)
-);
-CREATE INDEX IF NOT EXISTS idx_mahjong_room_members_room_id ON mahjong_room_members(room_id);
+  id CHAR(36) PRIMARY KEY,
+  room_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  joined_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT mahjong_room_members_room_id_fkey FOREIGN KEY (room_id) REFERENCES mahjong_rooms(id) ON DELETE CASCADE,
+  CONSTRAINT mahjong_room_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY mahjong_room_members_room_id_user_id_key (room_id, user_id),
+  INDEX idx_mahjong_room_members_room_id (room_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS mahjong_seats (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id UUID NOT NULL REFERENCES mahjong_rooms(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  room_id CHAR(36) NOT NULL,
   seat_index SMALLINT NOT NULL,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  joined_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(room_id, seat_index),
-  UNIQUE(room_id, user_id)
-);
-CREATE INDEX IF NOT EXISTS idx_mahjong_seats_room_id ON mahjong_seats(room_id);
+  user_id CHAR(36) NOT NULL,
+  joined_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT mahjong_seats_room_id_fkey FOREIGN KEY (room_id) REFERENCES mahjong_rooms(id) ON DELETE CASCADE,
+  CONSTRAINT mahjong_seats_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY mahjong_seats_room_id_seat_index_key (room_id, seat_index),
+  UNIQUE KEY mahjong_seats_room_id_user_id_key (room_id, user_id),
+  INDEX idx_mahjong_seats_room_id (room_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS mahjong_transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id UUID NOT NULL REFERENCES mahjong_rooms(id) ON DELETE CASCADE,
-  payer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id CHAR(36) PRIMARY KEY,
+  room_id CHAR(36) NOT NULL,
+  payer_id CHAR(36) NOT NULL,
   payee_type VARCHAR(20) NOT NULL,
-  payee_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  amount NUMERIC NOT NULL DEFAULT '0',
-  remark VARCHAR(500),
-  reversal_of UUID,
-  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_mahjong_transactions_room_id ON mahjong_transactions(room_id);
-CREATE UNIQUE INDEX IF NOT EXISTS mahjong_transactions_reversal_of_key ON mahjong_transactions(reversal_of);
+  payee_id CHAR(36) NULL,
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+  remark VARCHAR(500) NULL,
+  reversal_of CHAR(36) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT mahjong_transactions_room_id_fkey FOREIGN KEY (room_id) REFERENCES mahjong_rooms(id) ON DELETE CASCADE,
+  CONSTRAINT mahjong_transactions_payer_id_fkey FOREIGN KEY (payer_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT mahjong_transactions_payee_id_fkey FOREIGN KEY (payee_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY mahjong_transactions_reversal_of_key (reversal_of),
+  INDEX idx_mahjong_transactions_room_id (room_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 房间访问历史
 CREATE TABLE IF NOT EXISTS user_room_visits (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id CHAR(36) PRIMARY KEY,
   device_id VARCHAR(100) NOT NULL,
-  user_id UUID,
-  room_id UUID NOT NULL,
+  user_id CHAR(36) NULL,
+  room_id CHAR(36) NOT NULL,
   game_type VARCHAR(20) NOT NULL DEFAULT 'texas',
   room_code VARCHAR(50) NOT NULL,
   room_name VARCHAR(200) NOT NULL,
-  last_visited_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(device_id, room_id, game_type)
-);
-CREATE INDEX IF NOT EXISTS idx_user_room_visits_device_game ON user_room_visits(device_id, game_type, last_visited_at);
-CREATE INDEX IF NOT EXISTS idx_user_room_visits_user_game ON user_room_visits(user_id, game_type, last_visited_at);
+  last_visited_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY user_room_visits_device_room_game_key (device_id, room_id, game_type),
+  INDEX idx_user_room_visits_device_game (device_id, game_type, last_visited_at),
+  INDEX idx_user_room_visits_user_game (user_id, game_type, last_visited_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

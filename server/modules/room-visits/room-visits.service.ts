@@ -4,6 +4,7 @@ import {
   Logger,
   BadRequestException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import { userRoomVisits } from '@server/database/schema';
 import { eq, desc, and } from 'drizzle-orm';
@@ -53,7 +54,7 @@ export class RoomVisitsService {
       );
 
     if (existingRows.length > 0) {
-      const [updated] = await this.db
+      await this.db
         .update(userRoomVisits)
         .set({
           lastVisitedAt: new Date(),
@@ -61,22 +62,30 @@ export class RoomVisitsService {
           roomName: dto.roomName,
           userId: dto.userId ?? null,
         })
-        .where(eq(userRoomVisits.id, existingRows[0].id))
-        .returning();
+        .where(eq(userRoomVisits.id, existingRows[0].id));
+      const [updated] = await this.db
+        .select()
+        .from(userRoomVisits)
+        .where(eq(userRoomVisits.id, existingRows[0].id));
       return { visit: toRoomVisitRecord(updated) };
     }
 
-    const [inserted] = await this.db
+    const id = randomUUID();
+    await this.db
       .insert(userRoomVisits)
       .values({
+        id,
         deviceId: dto.deviceId,
         userId: dto.userId ?? null,
         roomId: dto.roomId,
         gameType: dto.gameType,
         roomCode: dto.roomCode,
         roomName: dto.roomName,
-      })
-      .returning();
+      });
+    const [inserted] = await this.db
+      .select()
+      .from(userRoomVisits)
+      .where(eq(userRoomVisits.id, id));
     return { visit: toRoomVisitRecord(inserted) };
   }
 

@@ -1,28 +1,37 @@
-// 数据库初始化脚本：在部署启动时执行 init.sql（幂等，可重复运行）
-const postgres = require('postgres');
+const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
 
-async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.error('DATABASE_URL environment variable is not set');
-    process.exit(1);
-  }
+function getConfig() {
+  const host = process.env.DB_HOST && process.env.DB_HOST.trim();
+  const user = process.env.DB_USER && process.env.DB_USER.trim();
+  const database = process.env.DB_NAME && process.env.DB_NAME.trim();
+  const password = process.env.DB_PASSWORD;
+  const port = Number(process.env.DB_PORT || '3306');
 
-  const sql = postgres(databaseUrl, { max: 1 });
-  try {
-    const schemaSql = fs.readFileSync(
-      path.join(__dirname, '..', 'init.sql'),
-      'utf8',
+  if (!host || !user || !database || password === undefined) {
+    throw new Error(
+      'Set DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, and DB_NAME before starting the service.',
     );
-    await sql.unsafe(schemaSql);
-    console.log('Database initialized successfully');
-  } catch (err) {
-    console.error('Failed to initialize database:', err);
-    process.exit(1);
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('DB_PORT must be a valid TCP port.');
+  }
+  return { host, port, user, password, database, charset: 'utf8mb4', multipleStatements: true };
+}
+
+async function main() {
+  let connection;
+  try {
+    connection = await mysql.createConnection(getConfig());
+    const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'init.sql'), 'utf8');
+    await connection.query(schemaSql);
+    console.log('MySQL schema initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize MySQL schema:', error);
+    process.exitCode = 1;
   } finally {
-    await sql.end();
+    if (connection) await connection.end();
   }
 }
 

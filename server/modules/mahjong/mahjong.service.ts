@@ -10,10 +10,11 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import {
   generateRoomCode,
-  extractPostgresErrorCode,
+  isUniqueConstraintError,
   normalizeRoomCode,
   parseNonNegativeAmount,
   toCents,
@@ -180,15 +181,15 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const [row] = await this.db
+      const id = randomUUID();
+      await this.db
         .insert(users)
-        .values({ name: trimmedName, deviceId: normalizedDeviceId })
-        .returning();
+        .values({ id, name: trimmedName, deviceId: normalizedDeviceId });
+      const [row] = await this.db.select().from(users).where(eq(users.id, id));
       await this.addIdentity(row.id, 'web_device', normalizedDeviceId);
       return { user: toMahjongUser(row) };
     } catch (error) {
-      const pgCode = extractPostgresErrorCode(error);
-      if (pgCode === '23505') {
+      if (isUniqueConstraintError(error)) {
         // 并发场景下 deviceId 冲突，返回已有用户
         const existing = await this.db
           .select()
@@ -300,14 +301,15 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
 
     // 保留 device_id 的非空约束以兼容现有数据库；真实身份以 user_identities 为准。
-    const [user] = await this.db
+    const id = randomUUID();
+    await this.db
       .insert(users)
-      .values({ name: '微信用户', deviceId: `wx:${openId}` })
-      .returning();
+      .values({ id, name: '微信用户', deviceId: `wx:${openId}` });
+    const [user] = await this.db.select().from(users).where(eq(users.id, id));
     try {
       await this.addIdentity(user.id, 'wechat_mini', openId);
     } catch (error) {
-      if (extractPostgresErrorCode(error) === '23505') {
+      if (isUniqueConstraintError(error)) {
         const concurrentUser = await this.findUserByIdentity('wechat_mini', openId);
         if (concurrentUser) {
           return { user: toMahjongUser(concurrentUser), isNewUser: false };
@@ -326,11 +328,11 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     if (normalizedName.length > 30) {
       throw new BadRequestException('用户名不能超过 30 个字符');
     }
-    const [user] = await this.db
+    await this.db
       .update(users)
       .set({ name: normalizedName })
-      .where(eq(users.id, userId))
-      .returning();
+      .where(eq(users.id, userId));
+    const [user] = await this.db.select().from(users).where(eq(users.id, userId));
     if (!user) {
       throw new NotFoundException('用户不存在');
     }
@@ -367,15 +369,20 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       if (creatorUserId) {
         await this.assertUserExists(creatorUserId);
       }
-      const [row] = await this.db
+      const id = randomUUID();
+      await this.db
         .insert(mahjongRooms)
         .values({
+          id,
           roomCode: upperCode,
           name: normalizedName,
           mode: 'free',
           creatorUserId: creatorUserId ?? null,
-        })
-        .returning();
+        });
+      const [row] = await this.db
+        .select()
+        .from(mahjongRooms)
+        .where(eq(mahjongRooms.id, id));
       if (creatorUserId) {
         await this.addMember(row.id, creatorUserId);
       }
@@ -389,22 +396,26 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         if (creatorUserId) {
           await this.assertUserExists(creatorUserId);
         }
-        const [row] = await this.db
+        const id = randomUUID();
+        await this.db
           .insert(mahjongRooms)
           .values({
+            id,
             roomCode: code,
             name: normalizedName,
             mode: 'free',
             creatorUserId: creatorUserId ?? null,
-          })
-          .returning();
+          });
+        const [row] = await this.db
+          .select()
+          .from(mahjongRooms)
+          .where(eq(mahjongRooms.id, id));
         if (creatorUserId) {
           await this.addMember(row.id, creatorUserId);
         }
         return { room: toMahjongRoom(row) };
       } catch (error) {
-        const pgCode = extractPostgresErrorCode(error);
-        if (pgCode === '23505') {
+        if (isUniqueConstraintError(error)) {
           continue;
         }
         this.logger.error('创建房间失败', JSON.stringify(error));
@@ -653,11 +664,9 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.db
         .insert(mahjongSeats)
-        .values({ roomId, seatIndex, userId })
-        .returning();
+        .values({ id: randomUUID(), roomId, seatIndex, userId });
     } catch (error) {
-      const pgCode = extractPostgresErrorCode(error);
-      if (pgCode === '23505') {
+      if (isUniqueConstraintError(error)) {
         throw new ConflictException('该座位已被占用或用户已就座');
       }
       this.logger.error('坐下失败', JSON.stringify(error));
@@ -683,16 +692,11 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
     const roomId = roomRows[0].id;
 
-    const deleted = await this.db
+    await this.db
       .delete(mahjongSeats)
       .where(
         and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, userId)),
-      )
-      .returning({ id: mahjongSeats.id });
-
-    if (deleted.length === 0) {
-      // 用户未就座，静默返回房间详情
-    }
+      );
 
     return this.getRoomDetail(roomCode);
   }
@@ -813,10 +817,23 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
   /** 幂等登记房间成员 */
   private async addMember(roomId: string, userId: string): Promise<void> {
-    await this.db
-      .insert(mahjongRoomMembers)
-      .values({ roomId, userId })
-      .onConflictDoNothing();
+    const existing = await this.db
+      .select({ id: mahjongRoomMembers.id })
+      .from(mahjongRoomMembers)
+      .where(
+        and(
+          eq(mahjongRoomMembers.roomId, roomId),
+          eq(mahjongRoomMembers.userId, userId),
+        ),
+      );
+    if (existing.length > 0) return;
+    try {
+      await this.db
+        .insert(mahjongRoomMembers)
+        .values({ id: randomUUID(), roomId, userId });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+    }
   }
 
   private async assertUserExists(userId: string): Promise<void> {
@@ -835,6 +852,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     providerSubject: string,
   ): Promise<void> {
     await this.db.insert(userIdentities).values({
+      id: randomUUID(),
       userId,
       provider,
       providerSubject,
@@ -971,6 +989,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.db.insert(mahjongTransactions).values({
+      id: randomUUID(),
       roomId,
       payerId: dto.payerId,
       payeeType: dto.payeeType,
@@ -1069,6 +1088,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await this.db.insert(mahjongTransactions).values({
+        id: randomUUID(),
         roomId,
         payerId: reversePayerId,
         payeeType: reversePayeeType,
@@ -1078,7 +1098,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         reversalOf: origin.id,
       });
     } catch (error) {
-      if (extractPostgresErrorCode(error) === '23505') {
+      if (isUniqueConstraintError(error)) {
         throw new BadRequestException('该记录已被冲正，不能重复冲正');
       }
       throw error;
