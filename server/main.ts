@@ -9,6 +9,7 @@ dotenv.config();
 
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { MahjongRealtimeService } from './modules/mahjong/mahjong-realtime.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -45,6 +46,7 @@ async function bootstrap() {
   });
 
   await app.listen(port, host);
+  app.get(MahjongRealtimeService).attach(app.getHttpServer());
   logger.log(`Server running on http://${host}:${port}`);
   logger.log(`API endpoints ready at http://${host}:${port}/api`);
 }

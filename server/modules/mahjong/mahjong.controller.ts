@@ -7,8 +7,11 @@ import {
   Param,
   Headers,
   ForbiddenException,
+  Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { MahjongService } from './mahjong.service';
+import { MahjongRealtimeService } from './mahjong-realtime.service';
 import type {
   CreateUserRequest,
   CreateUserResponse,
@@ -30,7 +33,10 @@ import type {
 
 @Controller('api/mahjong')
 export class MahjongController {
-  constructor(private readonly mahjongService: MahjongService) {}
+  constructor(
+    private readonly mahjongService: MahjongService,
+    private readonly realtime: MahjongRealtimeService,
+  ) {}
 
   /**
    * CloudBase injects x-wx-openid only for calls on the Mini Program private
@@ -111,6 +117,23 @@ export class MahjongController {
     @Param('roomCode') roomCode: string,
   ): Promise<MahjongRoomDetailResponse> {
     return this.mahjongService.getRoomDetail(roomCode);
+  }
+
+  /**
+   * Long-poll fallback for clients that cannot keep a WebSocket connection.
+   * The endpoint waits at most 20 seconds, then the client immediately opens
+   * the next request with the returned version.
+   */
+  @Get('rooms/:roomCode/events')
+  async waitForRoomEvent(
+    @Param('roomCode') roomCode: string,
+    @Query('since') since = '0',
+  ): Promise<{ version: number }> {
+    const version = Number(since);
+    if (!Number.isSafeInteger(version) || version < 0) {
+      throw new BadRequestException('since 必须是非负整数');
+    }
+    return this.realtime.waitForUpdate(roomCode, version);
   }
 
   // ---------- 座位相关 ----------

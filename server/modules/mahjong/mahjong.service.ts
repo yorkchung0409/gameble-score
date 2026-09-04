@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
+import { MahjongRealtimeService } from './mahjong-realtime.service';
 import {
   generateRoomCode,
   isUniqueConstraintError,
@@ -82,7 +83,10 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
   private dissolveTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(@Inject(DRIZZLE_DB) private readonly db: DbType) {}
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DbType,
+    private readonly realtime: MahjongRealtimeService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     this.dissolveTimer = setInterval(() => {
@@ -107,7 +111,11 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
   private async cleanupDissolvedRooms(): Promise<void> {
     const now = Date.now();
     const activeRooms = await this.db
-      .select({ id: mahjongRooms.id, createdAt: mahjongRooms.createdAt })
+      .select({
+        id: mahjongRooms.id,
+        roomCode: mahjongRooms.roomCode,
+        createdAt: mahjongRooms.createdAt,
+      })
       .from(mahjongRooms)
       .where(isNull(mahjongRooms.dissolvedAt));
     if (activeRooms.length === 0) return;
@@ -128,6 +136,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
 
     const toDissolve: string[] = [];
+    const dissolvedRoomCodes: string[] = [];
     for (const rm of activeRooms) {
       const lastTx = lastTxMap.get(rm.id);
       const lastActivity = lastTx
@@ -135,6 +144,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         : new Date(rm.createdAt).getTime();
       if (now - lastActivity > DISSOLVE_IDLE_MS) {
         toDissolve.push(rm.id);
+        dissolvedRoomCodes.push(rm.roomCode);
       }
     }
 
@@ -143,6 +153,9 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         .update(mahjongRooms)
         .set({ dissolvedAt: new Date() })
         .where(inArray(mahjongRooms.id, toDissolve));
+      for (const roomCode of dissolvedRoomCodes) {
+        this.realtime.broadcast(roomCode, 'dissolved');
+      }
       this.logger.log(`自动解散 ${toDissolve.length} 个麻将房间`);
     }
   }
@@ -673,6 +686,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw error;
     }
 
+    this.realtime.broadcast(roomCode, 'seat');
     return this.getRoomDetail(roomCode);
   }
 
@@ -698,6 +712,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, userId)),
       );
 
+    this.realtime.broadcast(roomCode, 'seat');
     return this.getRoomDetail(roomCode);
   }
 
@@ -729,6 +744,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.addMember(roomId, userId);
+    this.realtime.broadcast(roomCode, 'joined');
     return this.getRoomDetail(roomCode);
   }
 
@@ -780,6 +796,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       .set({ mode })
       .where(eq(mahjongRooms.id, roomRow.id));
 
+    this.realtime.broadcast(roomCode, 'mode');
     return this.getRoomDetail(roomCode);
   }
 
@@ -812,6 +829,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         ),
       );
 
+    this.realtime.broadcast(roomCode, 'left');
     return this.getRoomDetail(roomCode);
   }
 
@@ -998,6 +1016,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       remark: dto.remark,
     });
 
+    this.realtime.broadcast(roomCode, 'transaction');
     return this.getRoomDetail(roomCode);
   }
 
@@ -1104,6 +1123,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw error;
     }
 
+    this.realtime.broadcast(roomCode, 'reversed');
     return this.getRoomDetail(roomCode);
   }
 }
