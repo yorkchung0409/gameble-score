@@ -79,6 +79,46 @@ CREATE TABLE IF NOT EXISTS mahjong_rooms (
   dissolved_at DATETIME(6) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS poker_ledger_snapshots (
+  room_id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
+  net_profit DECIMAL(14,2) NOT NULL DEFAULT 0,
+  game_count INT NOT NULL DEFAULT 0,
+  archived_through DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  CONSTRAINT poker_ledger_snapshots_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+  CONSTRAINT poker_ledger_snapshots_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_poker_ledger_snapshots_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS mahjong_user_snapshots (
+  user_id CHAR(36) PRIMARY KEY,
+  net_profit DECIMAL(14,2) NOT NULL DEFAULT 0,
+  win_total DECIMAL(14,2) NOT NULL DEFAULT 0,
+  loss_total DECIMAL(14,2) NOT NULL DEFAULT 0,
+  tea_fee_total DECIMAL(14,2) NOT NULL DEFAULT 0,
+  archived_through DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  CONSTRAINT mahjong_user_snapshots_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS mahjong_opponent_snapshots (
+  id VARCHAR(73) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
+  opponent_user_id CHAR(36) NOT NULL,
+  net_profit DECIMAL(14,2) NOT NULL DEFAULT 0,
+  win_total DECIMAL(14,2) NOT NULL DEFAULT 0,
+  loss_total DECIMAL(14,2) NOT NULL DEFAULT 0,
+  transaction_count INT NOT NULL DEFAULT 0,
+  room_count INT NOT NULL DEFAULT 0,
+  archived_through DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  CONSTRAINT mahjong_opponent_snapshots_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT mahjong_opponent_snapshots_opponent_user_id_fkey FOREIGN KEY (opponent_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY mahjong_opponent_snapshots_user_opponent_key (user_id, opponent_user_id),
+  INDEX idx_mahjong_opponent_snapshots_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS mahjong_room_members (
   id CHAR(36) PRIMARY KEY,
   room_id CHAR(36) NOT NULL,

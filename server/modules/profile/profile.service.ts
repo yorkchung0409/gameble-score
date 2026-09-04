@@ -6,7 +6,10 @@ import {
   mahjongRoomMembers,
   mahjongRooms,
   mahjongTransactions,
+  mahjongOpponentSnapshots,
+  mahjongUserSnapshots,
   pokerLedgerOwners,
+  pokerLedgerSnapshots,
   rooms,
   users,
 } from '@server/database/schema';
@@ -110,25 +113,43 @@ export class ProfileService {
     const playerIds = owners
       .map((owner) => owner.selfPlayerId)
       .filter((playerId): playerId is string => Boolean(playerId));
+    const roomIds = owners.map((owner) => owner.room.id);
+    const snapshotRows = roomIds.length
+      ? await this.db
+        .select({ roomId: pokerLedgerSnapshots.roomId, netProfit: pokerLedgerSnapshots.netProfit, gameCount: pokerLedgerSnapshots.gameCount })
+        .from(pokerLedgerSnapshots)
+        .where(inArray(pokerLedgerSnapshots.roomId, roomIds))
+      : [];
     const rows = playerIds.length
       ? await this.db
         .select({ playerId: gamePlayers.playerId, netProfit: gamePlayers.netProfit })
         .from(gamePlayers)
         .where(inArray(gamePlayers.playerId, playerIds))
       : [];
+    const playerToRoom = new Map(
+      owners
+        .filter((owner): owner is typeof owner & { selfPlayerId: string } => Boolean(owner.selfPlayerId))
+        .map((owner) => [owner.selfPlayerId, owner.room.id]),
+    );
     const totals = new Map<string, { netCents: number; gameCount: number }>();
+    for (const row of snapshotRows) {
+      totals.set(row.roomId, {
+        netCents: toCents(row.netProfit),
+        gameCount: Number(row.gameCount || 0),
+      });
+    }
     for (const row of rows) {
-      const total = totals.get(row.playerId) ?? { netCents: 0, gameCount: 0 };
+      const roomId = playerToRoom.get(row.playerId);
+      if (!roomId) continue;
+      const total = totals.get(roomId) ?? { netCents: 0, gameCount: 0 };
       total.netCents += toCents(row.netProfit);
       total.gameCount += 1;
-      totals.set(row.playerId, total);
+      totals.set(roomId, total);
     }
 
     const ledgers = owners
       .map((owner) => {
-        const total = owner.selfPlayerId
-          ? totals.get(owner.selfPlayerId) ?? { netCents: 0, gameCount: 0 }
-          : { netCents: 0, gameCount: 0 };
+        const total = totals.get(owner.room.id) ?? { netCents: 0, gameCount: 0 };
         return {
           room: {
             id: owner.room.id,
@@ -217,6 +238,10 @@ export class ProfileService {
   }
 
   async getMahjongOpponents(userId: string): Promise<MahjongOpponentRecord[]> {
+    const snapshotRows = await this.db
+      .select()
+      .from(mahjongOpponentSnapshots)
+      .where(eq(mahjongOpponentSnapshots.userId, userId));
     const transactions = this.getEffectiveTransactions(await this.getMyTransactions(userId));
     const byOpponent = new Map<
       string,
@@ -227,8 +252,21 @@ export class ProfileService {
         roomIds: Set<string>;
         transactionCount: number;
         lastPlayedAt: Date;
+        snapshotRoomCount: number;
       }
     >();
+
+    for (const snapshot of snapshotRows) {
+      byOpponent.set(snapshot.opponentUserId, {
+        netCents: toCents(snapshot.netProfit),
+        winCents: toCents(snapshot.winTotal),
+        lossCents: toCents(snapshot.lossTotal),
+        roomIds: new Set<string>(),
+        transactionCount: Number(snapshot.transactionCount || 0),
+        lastPlayedAt: snapshot.archivedThrough,
+        snapshotRoomCount: Number(snapshot.roomCount || 0),
+      });
+    }
 
     for (const transaction of transactions) {
       if (transaction.payeeType !== 'user' || !transaction.payeeId) continue;
@@ -244,6 +282,7 @@ export class ProfileService {
         roomIds: new Set<string>(),
         transactionCount: 0,
         lastPlayedAt: transaction.createdAt,
+        snapshotRoomCount: 0,
       };
       total.netCents += netCents;
       if (netCents > 0) total.winCents += netCents;
@@ -271,7 +310,7 @@ export class ProfileService {
           netProfit: fromCents(total.netCents),
           winTotal: fromCents(total.winCents),
           lossTotal: fromCents(total.lossCents),
-          roomCount: total.roomIds.size,
+          roomCount: total.snapshotRoomCount + total.roomIds.size,
           transactionCount: total.transactionCount,
           lastPlayedAt: total.lastPlayedAt.toISOString(),
         };
@@ -326,9 +365,16 @@ export class ProfileService {
 
   private async getPokerTotals(userId: string) {
     const owners = await this.db
-      .select({ selfPlayerId: pokerLedgerOwners.selfPlayerId })
+      .select({ roomId: pokerLedgerOwners.roomId, selfPlayerId: pokerLedgerOwners.selfPlayerId })
       .from(pokerLedgerOwners)
       .where(eq(pokerLedgerOwners.userId, userId));
+    const roomIds = owners.map((owner) => owner.roomId);
+    const snapshotRows = roomIds.length
+      ? await this.db
+        .select({ netProfit: pokerLedgerSnapshots.netProfit, gameCount: pokerLedgerSnapshots.gameCount })
+        .from(pokerLedgerSnapshots)
+        .where(inArray(pokerLedgerSnapshots.roomId, roomIds))
+      : [];
     const playerIds = owners
       .map((owner) => owner.selfPlayerId)
       .filter((playerId): playerId is string => Boolean(playerId));
@@ -339,25 +385,29 @@ export class ProfileService {
         .where(inArray(gamePlayers.playerId, playerIds))
       : [];
     return {
-      netCents: rows.reduce((sum, row) => sum + toCents(row.netProfit), 0),
-      gameCount: rows.length,
+      netCents: snapshotRows.reduce((sum, row) => sum + toCents(row.netProfit), 0) + rows.reduce((sum, row) => sum + toCents(row.netProfit), 0),
+      gameCount: snapshotRows.reduce((sum, row) => sum + Number(row.gameCount || 0), 0) + rows.length,
       ledgerCount: owners.length,
       trackedLedgerCount: playerIds.length,
     };
   }
 
   private async getMahjongTotals(userId: string) {
-    const [transactions, roomRows] = await Promise.all([
+    const [transactions, roomRows, snapshotRows] = await Promise.all([
       this.getMyTransactions(userId),
       this.db
         .select({ roomId: mahjongRoomMembers.roomId })
         .from(mahjongRoomMembers)
         .where(eq(mahjongRoomMembers.userId, userId)),
+      this.db
+        .select()
+        .from(mahjongUserSnapshots)
+        .where(eq(mahjongUserSnapshots.userId, userId)),
     ]);
-    let netCents = 0;
-    let winCents = 0;
-    let lossCents = 0;
-    let teaFeeCents = 0;
+    let netCents = toCents(snapshotRows[0]?.netProfit ?? '0');
+    let winCents = toCents(snapshotRows[0]?.winTotal ?? '0');
+    let lossCents = toCents(snapshotRows[0]?.lossTotal ?? '0');
+    let teaFeeCents = toCents(snapshotRows[0]?.teaFeeTotal ?? '0');
     for (const transaction of this.getEffectiveTransactions(transactions)) {
       const amountCents = toCents(transaction.amount);
       if (transaction.payeeType === 'tea_fee' && transaction.payerId === userId) {

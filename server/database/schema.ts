@@ -3,6 +3,7 @@ import {
   date,
   decimal,
   foreignKey,
+  int,
   index,
   mysqlTable,
   smallint,
@@ -124,6 +125,64 @@ export const pokerLedgerOwners = mysqlTable(
   ],
 );
 
+/** Historical poker totals retained after old game rows are purged. */
+export const pokerLedgerSnapshots = mysqlTable(
+  'poker_ledger_snapshots',
+  {
+    roomId: varchar('room_id', { length: 36 }).primaryKey(),
+    userId: varchar('user_id', { length: 36 }).notNull(),
+    netProfit: decimal('net_profit', { precision: 14, scale: 2 }).notNull().default('0'),
+    gameCount: int('game_count').notNull().default(0),
+    archivedThrough: timestamp('archived_through', { fsp: 6 }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { fsp: 6 }).notNull().defaultNow().onUpdateNow(),
+  },
+  (table) => [
+    index('idx_poker_ledger_snapshots_user_id').on(table.userId),
+    foreignKey({ columns: [table.roomId], foreignColumns: [rooms.id], name: 'poker_ledger_snapshots_room_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'poker_ledger_snapshots_user_id_fkey' }).onDelete('cascade'),
+  ],
+);
+
+/** Historical Mahjong totals retained after old transaction rows are purged. */
+export const mahjongUserSnapshots = mysqlTable(
+  'mahjong_user_snapshots',
+  {
+    userId: varchar('user_id', { length: 36 }).primaryKey(),
+    netProfit: decimal('net_profit', { precision: 14, scale: 2 }).notNull().default('0'),
+    winTotal: decimal('win_total', { precision: 14, scale: 2 }).notNull().default('0'),
+    lossTotal: decimal('loss_total', { precision: 14, scale: 2 }).notNull().default('0'),
+    teaFeeTotal: decimal('tea_fee_total', { precision: 14, scale: 2 }).notNull().default('0'),
+    archivedThrough: timestamp('archived_through', { fsp: 6 }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { fsp: 6 }).notNull().defaultNow().onUpdateNow(),
+  },
+  (table) => [
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'mahjong_user_snapshots_user_id_fkey' }).onDelete('cascade'),
+  ],
+);
+
+/** Per-user opponent totals retained after old Mahjong transaction rows are purged. */
+export const mahjongOpponentSnapshots = mysqlTable(
+  'mahjong_opponent_snapshots',
+  {
+    id: varchar('id', { length: 73 }).primaryKey(),
+    userId: varchar('user_id', { length: 36 }).notNull(),
+    opponentUserId: varchar('opponent_user_id', { length: 36 }).notNull(),
+    netProfit: decimal('net_profit', { precision: 14, scale: 2 }).notNull().default('0'),
+    winTotal: decimal('win_total', { precision: 14, scale: 2 }).notNull().default('0'),
+    lossTotal: decimal('loss_total', { precision: 14, scale: 2 }).notNull().default('0'),
+    transactionCount: int('transaction_count').notNull().default(0),
+    roomCount: int('room_count').notNull().default(0),
+    archivedThrough: timestamp('archived_through', { fsp: 6 }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { fsp: 6 }).notNull().defaultNow().onUpdateNow(),
+  },
+  (table) => [
+    uniqueIndex('mahjong_opponent_snapshots_user_opponent_key').on(table.userId, table.opponentUserId),
+    index('idx_mahjong_opponent_snapshots_user_id').on(table.userId),
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'mahjong_opponent_snapshots_user_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.opponentUserId], foreignColumns: [users.id], name: 'mahjong_opponent_snapshots_opponent_user_id_fkey' }).onDelete('cascade'),
+  ],
+);
+
 export const mahjongRooms = mysqlTable(
   'mahjong_rooms',
   {
@@ -226,3 +285,6 @@ export const roomsTable = rooms;
 export const userRoomVisitsTable = userRoomVisits;
 export const usersTable = users;
 export const userIdentitiesTable = userIdentities;
+export const pokerLedgerSnapshotsTable = pokerLedgerSnapshots;
+export const mahjongUserSnapshotsTable = mahjongUserSnapshots;
+export const mahjongOpponentSnapshotsTable = mahjongOpponentSnapshots;
