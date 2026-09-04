@@ -12,6 +12,9 @@ import {
   extractPostgresErrorCode,
   normalizeRoomCode,
   parseNonNegativeAmount,
+  parseCalendarDate,
+  toCents,
+  fromCents,
 } from '@server/common/utils';
 import { rooms, players, games, gamePlayers } from '@server/database/schema';
 import { eq, desc, inArray, and, sql, sum } from 'drizzle-orm';
@@ -34,7 +37,7 @@ function toRoom(row: typeof rooms.$inferSelect): Room {
     roomName: row.roomName,
     gameType: row.gameType ?? 'texas',
     createdAt: row.createdAt.toISOString(),
-    updatedAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -65,8 +68,11 @@ export class PokerService {
       throw new BadRequestException('房间名称不能超过 50 个字符');
     }
 
-    if (roomCode && roomCode.length > 0) {
-      const upperCode = normalizeRoomCode(roomCode);
+    const upperCode = normalizeRoomCode(roomCode ?? '');
+    if (upperCode) {
+      if (upperCode.length > 50) {
+        throw new BadRequestException('房间码不能超过 50 个字符');
+      }
       const existing = await this.db
         .select({ id: rooms.id })
         .from(rooms)
@@ -87,7 +93,7 @@ export class PokerService {
       try {
         const [row] = await this.db
             .insert(rooms)
-            .values({ roomCode: code, roomName, gameType })
+            .values({ roomCode: code, roomName: normalizedName, gameType })
             .returning();
         return { room: toRoom(row) };
       } catch (error) {
@@ -155,43 +161,43 @@ export class PokerService {
     }
 
     const byGame = new Map<string, GamePlayer[]>();
-    let totalBuyInNum = 0;
+    let totalBuyInCents = 0;
     for (const gp of gamePlayerRows) {
       const arr = byGame.get(gp.gameId) ?? [];
       arr.push(gp);
       byGame.set(gp.gameId, arr);
-      totalBuyInNum += Number(gp.buyIn);
+      totalBuyInCents += toCents(gp.buyIn);
     }
 
     const gameList: Game[] = gameRows.map((g) => {
       const gps = byGame.get(g.id) ?? [];
-      let gameBuyIn = 0;
+      let gameBuyInCents = 0;
       for (const gp of gps) {
-        gameBuyIn += Number(gp.buyIn);
+        gameBuyInCents += toCents(gp.buyIn);
       }
       return {
         id: g.id,
         roomId: g.roomId,
         gameDate: g.gameDate,
         players: gps,
-        totalBuyIn: String(gameBuyIn),
+        totalBuyIn: fromCents(gameBuyInCents),
         playerCount: gps.length,
       };
     });
 
-    let latestGameBalanceDiff = 0;
-    let latestGameTurnover = 0;
+    let latestGameBalanceDiffCents = 0;
+    let latestGameTurnoverCents = 0;
     if (gameList.length > 0) {
       const latestPlayers = gameList[0].players;
-      let netSum = 0;
-      let winSum = 0;
+      let netSumCents = 0;
+      let winSumCents = 0;
       for (const p of latestPlayers) {
-        const np = Number(p.netProfit);
-        netSum += np;
-        if (np > 0) winSum += np;
+        const netProfitCents = toCents(p.netProfit);
+        netSumCents += netProfitCents;
+        if (netProfitCents > 0) winSumCents += netProfitCents;
       }
-      latestGameBalanceDiff = Math.abs(netSum);
-      latestGameTurnover = winSum;
+      latestGameBalanceDiffCents = Math.abs(netSumCents);
+      latestGameTurnoverCents = winSumCents;
     }
 
     return {
@@ -200,11 +206,11 @@ export class PokerService {
       games: gameList,
       stats: {
         totalGames: gameList.length,
-        totalBuyIn: String(totalBuyInNum),
-        latestGameBalanceDiff: String(latestGameBalanceDiff),
-        latestGameTurnover: String(latestGameTurnover),
+        totalBuyIn: fromCents(totalBuyInCents),
+        latestGameBalanceDiff: fromCents(latestGameBalanceDiffCents),
+        latestGameTurnover: fromCents(latestGameTurnoverCents),
       },
-      lastUpdated: room.createdAt,
+      lastUpdated: room.updatedAt,
     };
   }
 
@@ -216,6 +222,13 @@ export class PokerService {
   }
 
   async updateRoom(roomCode: string, roomName: string): Promise<{ room: Room }> {
+    const normalizedName = (roomName || '').trim();
+    if (!normalizedName) {
+      throw new BadRequestException('房间名称不能为空');
+    }
+    if (normalizedName.length > 50) {
+      throw new BadRequestException('房间名称不能超过 50 个字符');
+    }
     const roomRows = await this.db
       .select({ id: rooms.id })
       .from(rooms)
@@ -225,13 +238,20 @@ export class PokerService {
     }
     const [updated] = await this.db
       .update(rooms)
-      .set({ roomName })
+      .set({ roomName: normalizedName, updatedAt: new Date() })
       .where(eq(rooms.id, roomRows[0].id))
       .returning();
     return { room: toRoom(updated) };
   }
 
   async addPlayer(roomCode: string, name: string): Promise<Player> {
+    const normalizedName = (name || '').trim();
+    if (!normalizedName) {
+      throw new BadRequestException('人员名称不能为空');
+    }
+    if (normalizedName.length > 100) {
+      throw new BadRequestException('人员名称不能超过 100 个字符');
+    }
     const roomRows = await this.db
       .select({ id: rooms.id })
       .from(rooms)
@@ -241,7 +261,7 @@ export class PokerService {
     }
     const [row] = await this.db
       .insert(players)
-      .values({ roomId: roomRows[0].id, name })
+      .values({ roomId: roomRows[0].id, name: normalizedName })
       .returning();
     await this.touchRoom(roomRows[0].id);
     return toPlayer(row);
@@ -287,6 +307,7 @@ export class PokerService {
     if (!dto.players || dto.players.length === 0) {
       throw new BadRequestException('牌局至少需要一名玩家');
     }
+    const gameDate = parseCalendarDate(dto.gameDate, '牌局日期');
 
     const roomId = roomRows[0].id;
 
@@ -316,7 +337,7 @@ export class PokerService {
     const result = await this.db.transaction(async (tx) => {
       const [gameRow] = await tx
         .insert(games)
-        .values({ roomId, gameDate: dto.gameDate })
+        .values({ roomId, gameDate })
         .returning();
 
       const gpRows = await tx
@@ -330,7 +351,7 @@ export class PokerService {
               playerId: p.playerId,
               buyIn: String(buyIn),
               balance: String(balance),
-              netProfit: String(Math.round((balance - buyIn) * 100) / 100),
+              netProfit: fromCents(toCents(balance) - toCents(buyIn)),
             };
           }),
         )
@@ -356,9 +377,9 @@ export class PokerService {
         netProfit: gp.netProfit,
       }));
 
-      let gameBuyIn = 0;
+      let gameBuyInCents = 0;
       for (const gp of gamePlayerList) {
-        gameBuyIn += Number(gp.buyIn);
+        gameBuyInCents += toCents(gp.buyIn);
       }
 
       const game: Game = {
@@ -366,13 +387,14 @@ export class PokerService {
         roomId: gameRow.roomId,
         gameDate: gameRow.gameDate,
         players: gamePlayerList,
-        totalBuyIn: String(gameBuyIn),
+        totalBuyIn: fromCents(gameBuyInCents),
         playerCount: gamePlayerList.length,
       };
 
       return { game };
     });
 
+    await this.touchRoom(roomId);
     return result;
   }
 
@@ -425,11 +447,15 @@ export class PokerService {
         throw new BadRequestException('存在不属于该房间的玩家');
       }
     }
+    const gameDate =
+      dto.gameDate === undefined
+        ? undefined
+        : parseCalendarDate(dto.gameDate, '牌局日期');
 
     const result = await this.db.transaction(async (tx) => {
       const patch: Partial<typeof games.$inferInsert> = {};
-      if (dto.gameDate !== undefined) {
-        patch.gameDate = dto.gameDate;
+      if (gameDate !== undefined) {
+        patch.gameDate = gameDate;
       }
       let gameRow = gameRows[0];
       if (Object.keys(patch).length > 0) {
@@ -457,7 +483,7 @@ export class PokerService {
                 playerId: p.playerId,
                 buyIn: String(buyIn),
                 balance: String(balance),
-                netProfit: String(Math.round((balance - buyIn) * 100) / 100),
+              netProfit: fromCents(toCents(balance) - toCents(buyIn)),
               };
             }),
           )
@@ -499,9 +525,9 @@ export class PokerService {
         gamePlayerList = existingGps;
       }
 
-      let gameBuyIn = 0;
+      let gameBuyInCents = 0;
       for (const gp of gamePlayerList) {
-        gameBuyIn += Number(gp.buyIn);
+        gameBuyInCents += toCents(gp.buyIn);
       }
 
       const game: Game = {
@@ -509,13 +535,14 @@ export class PokerService {
         roomId: gameRow.roomId,
         gameDate: gameRow.gameDate,
         players: gamePlayerList,
-        totalBuyIn: String(gameBuyIn),
+        totalBuyIn: fromCents(gameBuyInCents),
         playerCount: gamePlayerList.length,
       };
 
       return { game };
     });
 
+    await this.touchRoom(roomId);
     return result;
   }
 

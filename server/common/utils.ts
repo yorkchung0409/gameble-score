@@ -30,15 +30,44 @@ export function normalizeRoomCode(roomCode: string): string {
   return (roomCode || '').trim().toUpperCase();
 }
 
-/** 金额字段：仅允许最多两位小数的非负数字字符串，返回校验后的 number，非法抛 400 */
-export function parseNonNegativeAmount(value: number | undefined, fieldName: string): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) {
+/** 严格校验 YYYY-MM-DD，避免由数据库抛出不稳定的日期格式错误。 */
+export function parseCalendarDate(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new BadRequestException(`${fieldName}格式必须为 YYYY-MM-DD`);
+  }
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new BadRequestException(`${fieldName}不是有效日期`);
+  }
+  return value;
+}
+
+/**
+ * 金额字段仅接受有限的 number，且精度最多两位小数。
+ * 保持金额从请求进入系统起就是分级精度，避免把 1.234 静默四舍五入后写入账本。
+ */
+export function parseNonNegativeAmount(value: unknown, fieldName: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new BadRequestException(`${fieldName}不是有效数字`);
   }
-  if (n < 0) {
+  if (value < 0) {
     throw new BadRequestException(`${fieldName}不能为负数`);
   }
-  // 保留两位小数精度，避免浮点误差
-  return Math.round(n * 100) / 100;
+
+  const cents = Math.round(value * 100);
+  if (Math.abs(value * 100 - cents) > 1e-8) {
+    throw new BadRequestException(`${fieldName}最多支持两位小数`);
+  }
+  return cents / 100;
+}
+
+/** 将已校验或数据库读取的金额转为整数分，供统计和差额计算使用。 */
+export function toCents(value: string | number): number {
+  return Math.round(Number(value) * 100);
+}
+
+/** 将整数分转回 API 既有的金额字符串格式。 */
+export function fromCents(value: number): string {
+  return String(value / 100);
 }

@@ -14,6 +14,9 @@ import {
   generateRoomCode,
   extractPostgresErrorCode,
   normalizeRoomCode,
+  parseNonNegativeAmount,
+  toCents,
+  fromCents,
 } from '@server/common/utils';
 import {
   users,
@@ -144,13 +147,14 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
   async createUser(name: string, deviceId: string): Promise<CreateUserResponse> {
     const trimmedName = (name || '').trim();
+    const normalizedDeviceId = (deviceId || '').trim();
     if (!trimmedName) {
       throw new BadRequestException('用户名不能为空');
     }
     if (trimmedName.length > 30) {
       throw new BadRequestException('用户名不能超过 30 个字符');
     }
-    if (!deviceId || deviceId.trim().length === 0) {
+    if (!normalizedDeviceId) {
       throw new BadRequestException('设备ID不能为空');
     }
 
@@ -158,7 +162,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     const existingByDevice = await this.db
       .select()
       .from(users)
-      .where(eq(users.deviceId, deviceId));
+      .where(eq(users.deviceId, normalizedDeviceId));
     if (existingByDevice.length > 0) {
       return { user: toMahjongUser(existingByDevice[0]) };
     }
@@ -167,7 +171,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     const existingByName = await this.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.name, name));
+      .where(eq(users.name, trimmedName));
     if (existingByName.length > 0) {
       throw new ConflictException('用户名已存在');
     }
@@ -175,7 +179,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     try {
       const [row] = await this.db
         .insert(users)
-        .values({ name: trimmedName, deviceId: deviceId.trim() })
+        .values({ name: trimmedName, deviceId: normalizedDeviceId })
         .returning();
       return { user: toMahjongUser(row) };
     } catch (error) {
@@ -185,7 +189,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         const existing = await this.db
           .select()
           .from(users)
-          .where(eq(users.deviceId, deviceId));
+          .where(eq(users.deviceId, normalizedDeviceId));
         if (existing.length > 0) {
           return { user: toMahjongUser(existing[0]) };
         }
@@ -198,10 +202,14 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getUserByDevice(deviceId: string): Promise<GetUserByDeviceResponse> {
+    const normalizedDeviceId = (deviceId || '').trim();
+    if (!normalizedDeviceId) {
+      return { user: null };
+    }
     const rows = await this.db
       .select()
       .from(users)
-      .where(eq(users.deviceId, deviceId));
+      .where(eq(users.deviceId, normalizedDeviceId));
     if (rows.length === 0) {
       return { user: null };
     }
@@ -223,14 +231,20 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('房间名称不能超过 50 个字符');
     }
 
-    if (roomCode && roomCode.length > 0) {
-      const upperCode = normalizeRoomCode(roomCode);
+    const upperCode = normalizeRoomCode(roomCode ?? '');
+    if (upperCode) {
+      if (upperCode.length > 50) {
+        throw new BadRequestException('房间码不能超过 50 个字符');
+      }
       const existing = await this.db
         .select({ id: mahjongRooms.id })
         .from(mahjongRooms)
         .where(eq(mahjongRooms.roomCode, upperCode));
       if (existing.length > 0) {
         throw new ConflictException('房间码已存在');
+      }
+      if (creatorUserId) {
+        await this.assertUserExists(creatorUserId);
       }
       const [row] = await this.db
         .insert(mahjongRooms)
@@ -251,6 +265,9 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const code = generateRoomCode();
       try {
+        if (creatorUserId) {
+          await this.assertUserExists(creatorUserId);
+        }
         const [row] = await this.db
           .insert(mahjongRooms)
           .values({
@@ -410,23 +427,23 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       balanceMap.set(uid, 0);
     }
 
-    let teaFeeTotalNum = 0;
-    let totalTurnoverNum = 0;
+    let teaFeeTotalCents = 0;
+    let totalTurnoverCents = 0;
 
     for (const tx of txRows) {
-      const amt = Number(tx.amount);
-      totalTurnoverNum += Math.abs(amt);
+      const amountCents = toCents(tx.amount);
+      totalTurnoverCents += Math.abs(amountCents);
 
       if (tx.payeeType === 'tea_fee') {
-        teaFeeTotalNum += amt;
+        teaFeeTotalCents += amountCents;
       } else if (tx.payeeType === 'user' && tx.payeeId) {
         if (balanceMap.has(tx.payeeId)) {
-          balanceMap.set(tx.payeeId, balanceMap.get(tx.payeeId)! + amt);
+          balanceMap.set(tx.payeeId, balanceMap.get(tx.payeeId)! + amountCents);
         }
       }
 
       if (balanceMap.has(tx.payerId)) {
-        balanceMap.set(tx.payerId, balanceMap.get(tx.payerId)! - amt);
+        balanceMap.set(tx.payerId, balanceMap.get(tx.payerId)! - amountCents);
       }
     }
 
@@ -435,16 +452,16 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       .map((uid) => ({
         userId: uid,
         userName: userNameMap.get(uid) ?? '',
-        balance: String(balanceMap.get(uid) ?? 0),
+        balance: fromCents(balanceMap.get(uid) ?? 0),
       }))
       .sort((a, b) => Math.abs(Number(b.balance)) - Math.abs(Number(a.balance)));
 
     // balanceCheck: 所有用户余额之和 + 茶费 = 0 则 balanced
     const sumBalances = balances.reduce(
-      (acc: number, b: { balance: string }) => acc + Number(b.balance),
+      (acc: number, b: { balance: string }) => acc + toCents(b.balance),
       0,
     );
-    const balanceCheck = sumBalances + teaFeeTotalNum === 0 ? 'balanced' : 'unbalanced';
+    const balanceCheck = sumBalances + teaFeeTotalCents === 0 ? 'balanced' : 'unbalanced';
 
     return {
       room,
@@ -453,8 +470,8 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       transactions,
       stats: {
         balances,
-        teaFeeTotal: String(teaFeeTotalNum),
-        totalTurnover: String(totalTurnoverNum),
+        teaFeeTotal: fromCents(teaFeeTotalCents),
+        totalTurnover: fromCents(totalTurnoverCents),
         balanceCheck,
       },
     };
@@ -467,7 +484,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     seatIndex: number,
   ): Promise<MahjongRoomDetailResponse> {
-    if (seatIndex < 0 || seatIndex > 3) {
+    if (!Number.isInteger(seatIndex) || seatIndex < 0 || seatIndex > 3) {
       throw new BadRequestException('座位号必须在 0-3 之间');
     }
 
@@ -675,13 +692,19 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
   /** 幂等登记房间成员 */
   private async addMember(roomId: string, userId: string): Promise<void> {
-    try {
-      await this.db
-        .insert(mahjongRoomMembers)
-        .values({ roomId, userId })
-        .onConflictDoNothing();
-    } catch (error) {
-      this.logger.debug('加入成员幂等处理', JSON.stringify(error));
+    await this.db
+      .insert(mahjongRoomMembers)
+      .values({ roomId, userId })
+      .onConflictDoNothing();
+  }
+
+  private async assertUserExists(userId: string): Promise<void> {
+    const rows = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (rows.length === 0) {
+      throw new BadRequestException('用户不存在');
     }
   }
 
@@ -691,11 +714,21 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     roomCode: string,
     dto: CreateTransactionRequest,
   ): Promise<MahjongRoomDetailResponse> {
-    if (!dto.amount || dto.amount <= 0) {
+    const amount = parseNonNegativeAmount(dto.amount, '转账金额');
+    if (amount <= 0) {
       throw new BadRequestException('转账金额必须大于 0');
     }
     if (dto.payeeType !== 'user' && dto.payeeType !== 'tea_fee') {
       throw new BadRequestException('收款方类型无效');
+    }
+    if (
+      dto.remark !== undefined &&
+      (typeof dto.remark !== 'string' || dto.remark.length > 500)
+    ) {
+      throw new BadRequestException('备注不能超过 500 个字符');
+    }
+    if (dto.operatorUserId !== dto.payerId) {
+      throw new ForbiddenException('只能以自己的身份创建转账');
     }
 
     const roomRows = await this.db
@@ -792,7 +825,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       payerId: dto.payerId,
       payeeType: dto.payeeType,
       payeeId: payeeIdValue,
-      amount: String(dto.amount),
+      amount: fromCents(toCents(amount)),
       remark: dto.remark,
     });
 
@@ -884,15 +917,22 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
     const originRemark = origin.remark ? `（${origin.remark}）` : '';
 
-    await this.db.insert(mahjongTransactions).values({
-      roomId,
-      payerId: reversePayerId,
-      payeeType: reversePayeeType,
-      payeeId: reversePayeeId,
-      amount: reverseAmount,
-      remark: `【冲正】${originRemark}`,
-      reversalOf: origin.id,
-    });
+    try {
+      await this.db.insert(mahjongTransactions).values({
+        roomId,
+        payerId: reversePayerId,
+        payeeType: reversePayeeType,
+        payeeId: reversePayeeId,
+        amount: reverseAmount,
+        remark: `【冲正】${originRemark}`,
+        reversalOf: origin.id,
+      });
+    } catch (error) {
+      if (extractPostgresErrorCode(error) === '23505') {
+        throw new BadRequestException('该记录已被冲正，不能重复冲正');
+      }
+      throw error;
+    }
 
     return this.getRoomDetail(roomCode);
   }

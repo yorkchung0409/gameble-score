@@ -119,6 +119,9 @@ export class RoomVisitsService {
       return { visits: [] };
     }
 
+    const safeLimit = Number.isInteger(limit)
+      ? Math.min(Math.max(limit, 1), 20)
+      : 10;
     const rows = await this.db
       .select()
       .from(userRoomVisits)
@@ -129,7 +132,7 @@ export class RoomVisitsService {
         ),
       )
       .orderBy(desc(userRoomVisits.lastVisitedAt))
-      .limit(limit);
+      .limit(safeLimit);
 
     return {
       visits: rows.map((row) => toRoomVisitRecord(row)),

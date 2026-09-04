@@ -20,10 +20,10 @@ async function bootstrap() {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
-  // CORS：默认同源；可通过 CORS_ORIGIN 环境变量显式指定允许的来源（逗号分隔）
+  // CORS：默认仅同源；跨域部署时通过 CORS_ORIGIN 显式指定允许的来源（逗号分隔）
   const corsOrigin = process.env.CORS_ORIGIN;
   app.enableCors({
-    origin: corsOrigin ? corsOrigin.split(',').map((s) => s.trim()) : true,
+    origin: corsOrigin ? corsOrigin.split(',').map((s) => s.trim()) : false,
     credentials: true,
   });
 
