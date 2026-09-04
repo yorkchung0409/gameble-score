@@ -43,8 +43,8 @@ import type {
   WeChatMiniProgramLoginResponse,
 } from '@shared/api.interface';
 
-// 自动解散：30 分钟无转账解散；扫描间隔 15 分钟
-const DISSOLVE_SCAN_INTERVAL_MS = 15 * 60 * 1000;
+// 自动解散：30 分钟无转账解散；扫描间隔 5 分钟
+const DISSOLVE_SCAN_INTERVAL_MS = 5 * 60 * 1000;
 const DISSOLVE_IDLE_MS = 30 * 60 * 1000;
 
 function toMahjongUser(row: typeof users.$inferSelect): MahjongUser {
@@ -448,7 +448,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     if (roomRows.length === 0) {
       throw new NotFoundException('房间不存在');
     }
-    const roomRow = roomRows[0];
+    const roomRow = await this.dissolveRoomIfIdle(roomRows[0]);
     const room = toMahjongRoom(roomRow);
     const roomId = roomRow.id;
 
@@ -620,6 +620,34 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         balanceCheck,
       },
     };
+  }
+
+  /**
+   * The periodic scanner is the normal path, but a room can be opened between
+   * scans. Check the requested room on demand so an expired room is archived
+   * immediately instead of appearing active until the next timer tick.
+   */
+  private async dissolveRoomIfIdle(
+    roomRow: typeof mahjongRooms.$inferSelect,
+  ): Promise<typeof mahjongRooms.$inferSelect> {
+    if (roomRow.dissolvedAt) return roomRow;
+
+    const [latest] = await this.db
+      .select({ lastTxAt: max(mahjongTransactions.createdAt) })
+      .from(mahjongTransactions)
+      .where(eq(mahjongTransactions.roomId, roomRow.id));
+    const lastActivityAt = latest?.lastTxAt
+      ? new Date(latest.lastTxAt).getTime()
+      : roomRow.createdAt.getTime();
+    if (Date.now() - lastActivityAt <= DISSOLVE_IDLE_MS) return roomRow;
+
+    const dissolvedAt = new Date();
+    await this.db
+      .update(mahjongRooms)
+      .set({ dissolvedAt })
+      .where(and(eq(mahjongRooms.id, roomRow.id), isNull(mahjongRooms.dissolvedAt)));
+    this.realtime.broadcast(roomRow.roomCode, 'dissolved');
+    return { ...roomRow, dissolvedAt };
   }
 
   // ---------- 座位相关 ----------
