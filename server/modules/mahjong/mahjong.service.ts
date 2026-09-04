@@ -6,6 +6,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  UnauthorizedException,
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
@@ -220,10 +221,32 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * 小程序登录必须由服务端使用 AppSecret 交换 code；客户端不应直接请求微信登录接口。
-   * 这里仅建立业务身份，昵称仍由用户通过小程序的 nickname 输入能力主动填写。
+   * CloudBase private calls carry the Mini Program's OpenID in a trusted
+   * gateway header. This avoids sending an AppSecret to the runtime entirely.
    */
-  async loginWithWeChatCode(code: string): Promise<WeChatMiniProgramLoginResponse> {
+  async loginWithWeChatOpenId(
+    openId: string,
+  ): Promise<WeChatMiniProgramLoginResponse> {
+    const normalizedOpenId = this.normalizeWeChatOpenId(openId);
+    return this.findOrCreateWeChatUser(normalizedOpenId);
+  }
+
+  async getUserIdByWeChatOpenId(openId: string): Promise<string> {
+    const normalizedOpenId = this.normalizeWeChatOpenId(openId);
+    const user = await this.findUserByIdentity('wechat_mini', normalizedOpenId);
+    if (!user) {
+      throw new UnauthorizedException('请先完成微信登录');
+    }
+    return user.id;
+  }
+
+  /**
+   * Public deployments may still use wx.login + jscode2session. CloudBase
+   * private calls use loginWithWeChatOpenId instead and do not need AppSecret.
+   */
+  async loginWithWeChatCode(
+    code: string | undefined,
+  ): Promise<WeChatMiniProgramLoginResponse> {
     const normalizedCode = (code || '').trim();
     if (!normalizedCode || normalizedCode.length > 512) {
       throw new BadRequestException('微信登录凭证无效');
@@ -257,7 +280,21 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('微信登录失败，请重新进入小程序');
     }
 
-    const existing = await this.findUserByIdentity('wechat_mini', payload.openid);
+    return this.loginWithWeChatOpenId(payload.openid);
+  }
+
+  private normalizeWeChatOpenId(openId: string): string {
+    const normalizedOpenId = (openId || '').trim();
+    if (!normalizedOpenId || normalizedOpenId.length > 128) {
+      throw new BadRequestException('微信身份信息无效');
+    }
+    return normalizedOpenId;
+  }
+
+  private async findOrCreateWeChatUser(
+    openId: string,
+  ): Promise<WeChatMiniProgramLoginResponse> {
+    const existing = await this.findUserByIdentity('wechat_mini', openId);
     if (existing) {
       return { user: toMahjongUser(existing), isNewUser: false };
     }
@@ -265,13 +302,13 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     // 保留 device_id 的非空约束以兼容现有数据库；真实身份以 user_identities 为准。
     const [user] = await this.db
       .insert(users)
-      .values({ name: '微信用户', deviceId: `wx:${payload.openid}` })
+      .values({ name: '微信用户', deviceId: `wx:${openId}` })
       .returning();
     try {
-      await this.addIdentity(user.id, 'wechat_mini', payload.openid);
+      await this.addIdentity(user.id, 'wechat_mini', openId);
     } catch (error) {
       if (extractPostgresErrorCode(error) === '23505') {
-        const concurrentUser = await this.findUserByIdentity('wechat_mini', payload.openid);
+        const concurrentUser = await this.findUserByIdentity('wechat_mini', openId);
         if (concurrentUser) {
           return { user: toMahjongUser(concurrentUser), isNewUser: false };
         }

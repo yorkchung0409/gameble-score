@@ -91,16 +91,23 @@ npm start
 6. 启动命令：`npm start`
 7. 在平台的数据库控制台执行 `init.sql` 初始化表结构
 
-### 方式三：Vercel + Supabase
+### 方式三：微信云托管（小程序推荐）
+1. 在微信开发者工具中开通云开发环境，并在云托管中使用本仓库的 `Dockerfile` 部署服务。
+2. 服务名填写 `express-drsy`，容器端口填写 `3000`，访问方式选择仅小程序私有访问，不开启公网访问。
+3. 在同一云开发环境创建 PostgreSQL 数据库，并将连接地址配置为云托管服务环境变量 `DATABASE_URL`。
+4. 云托管会注入 `PORT`；应用会自动初始化 `init.sql` 中的表结构。小程序通过 `wx.cloud.callContainer` 调用服务，因此不需要在小程序后台填写合法 request 域名，也不需要配置 `WECHAT_APP_SECRET`。
+5. 部署完成后查看 `/health` 云端调试接口，确认返回 `status: ok`，再在微信开发者工具运行小程序。
+
+云托管服务的环境变量只绑定到服务版本。数据库连接字符串属于密钥，应仅填写在云托管控制台，绝不能提交到 Git 仓库。
+
+### 方式四：Vercel + Supabase
 - 前端部署到 Vercel
 - 数据库用 Supabase（PostgreSQL）
 - 后端需要单独部署（Vercel Serverless Functions 或其他平台）
 
 ## 微信小程序
 
-微信小程序客户端已独立至 [gameble-score-miniprogram](https://github.com/yorkchung0409/gameble-score-miniprogram)。它使用本仓库后端的微信登录与麻将 API；服务端需配置 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。
-
-小程序请求后端前，需要配置 HTTPS API 域名并在微信公众平台登记为合法 request 域名。
+微信小程序客户端已独立至 [gameble-score-miniprogram](https://github.com/yorkchung0409/gameble-score-miniprogram)。它使用本仓库后端的微信登录与麻将 API。默认通过微信云托管私有链路调用 `express-drsy`，不需要 HTTPS API 域名或 `WECHAT_APP_SECRET`；公网 `wx.login` 回退模式才需要配置 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。
 
 ## 项目结构
 

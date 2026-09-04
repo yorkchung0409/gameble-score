@@ -103,7 +103,8 @@ export interface GetUserByDeviceResponse {
 }
 
 export interface WeChatMiniProgramLoginRequest {
-  code: string;
+  /** CloudBase private calls identify the user through x-wx-openid, so code is only needed for the public fallback. */
+  code?: string;
 }
 
 export interface WeChatMiniProgramLoginResponse {

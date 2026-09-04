@@ -1,0 +1,13 @@
+.git
+.githooks
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+.agent
+.npm_cache
+tmp
+temp
+*.log
