@@ -11,6 +11,7 @@ async function runStartupMigrations(queryClient: ReturnType<typeof postgres>) {
   await queryClient.unsafe(`
     ALTER TABLE mahjong_rooms ADD COLUMN IF NOT EXISTS mode VARCHAR(20) NOT NULL DEFAULT 'seated';
     ALTER TABLE mahjong_rooms ADD COLUMN IF NOT EXISTS creator_user_id UUID;
+    ALTER TABLE mahjong_rooms ADD COLUMN IF NOT EXISTS dissolved_at TIMESTAMP(6);
     CREATE TABLE IF NOT EXISTS mahjong_room_members (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       room_id UUID NOT NULL REFERENCES mahjong_rooms(id) ON DELETE CASCADE,
