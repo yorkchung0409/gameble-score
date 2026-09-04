@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, or } from 'drizzle-orm';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import {
   gamePlayers,
@@ -29,6 +29,19 @@ type MyTransaction = {
   reversalOf: string | null;
   createdAt: Date;
 };
+
+const DEFAULT_HISTORY_PAGE_SIZE = 20;
+const MAX_HISTORY_PAGE_SIZE = 50;
+
+function normalizePage(limit?: number, offset?: number) {
+  const safeLimit = Number.isInteger(limit)
+    ? Math.min(Math.max(limit as number, 1), MAX_HISTORY_PAGE_SIZE)
+    : DEFAULT_HISTORY_PAGE_SIZE;
+  const safeOffset = Number.isInteger(offset) && (offset as number) >= 0
+    ? offset as number
+    : 0;
+  return { safeLimit, safeOffset };
+}
 
 function toUser(row: typeof users.$inferSelect) {
   return {
@@ -70,15 +83,29 @@ export class ProfileService {
     };
   }
 
-  async getPokerLedgers(userId: string): Promise<PersonalPokerLedgerRecord[]> {
-    const owners = await this.db
-      .select({
-        room: rooms,
-        selfPlayerId: pokerLedgerOwners.selfPlayerId,
-      })
-      .from(pokerLedgerOwners)
-      .innerJoin(rooms, eq(pokerLedgerOwners.roomId, rooms.id))
-      .where(eq(pokerLedgerOwners.userId, userId));
+  async getPokerLedgers(
+    userId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<{ ledgers: PersonalPokerLedgerRecord[]; total: number; hasMore: boolean; nextOffset: number }> {
+    const { safeLimit, safeOffset } = normalizePage(limit, offset);
+    const [owners, countRows] = await Promise.all([
+      this.db
+        .select({
+          room: rooms,
+          selfPlayerId: pokerLedgerOwners.selfPlayerId,
+        })
+        .from(pokerLedgerOwners)
+        .innerJoin(rooms, eq(pokerLedgerOwners.roomId, rooms.id))
+        .where(eq(pokerLedgerOwners.userId, userId))
+        .orderBy(desc(rooms.updatedAt), desc(rooms.id))
+        .limit(safeLimit)
+        .offset(safeOffset),
+      this.db
+        .select({ total: count() })
+        .from(pokerLedgerOwners)
+        .where(eq(pokerLedgerOwners.userId, userId)),
+    ]);
 
     const playerIds = owners
       .map((owner) => owner.selfPlayerId)
@@ -97,7 +124,7 @@ export class ProfileService {
       totals.set(row.playerId, total);
     }
 
-    return owners
+    const ledgers = owners
       .map((owner) => {
         const total = owner.selfPlayerId
           ? totals.get(owner.selfPlayerId) ?? { netCents: 0, gameCount: 0 }
@@ -115,17 +142,36 @@ export class ProfileService {
           myNetProfit: fromCents(total.netCents),
           myGameCount: total.gameCount,
         };
-      })
-      .sort((left, right) => right.room.updatedAt.localeCompare(left.room.updatedAt));
+      });
+    const total = Number(countRows[0]?.total || 0);
+    const nextOffset = safeOffset + ledgers.length;
+    return { ledgers, total, hasMore: nextOffset < total, nextOffset };
   }
 
-  async getMahjongRooms(userId: string): Promise<PersonalMahjongRoomRecord[]> {
-    const membershipRows = await this.db
-      .select({ room: mahjongRooms })
-      .from(mahjongRoomMembers)
-      .innerJoin(mahjongRooms, eq(mahjongRoomMembers.roomId, mahjongRooms.id))
-      .where(eq(mahjongRoomMembers.userId, userId));
-    if (membershipRows.length === 0) return [];
+  async getMahjongRooms(
+    userId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<{ rooms: PersonalMahjongRoomRecord[]; total: number; hasMore: boolean; nextOffset: number }> {
+    const { safeLimit, safeOffset } = normalizePage(limit, offset);
+    const [membershipRows, countRows] = await Promise.all([
+      this.db
+        .select({ room: mahjongRooms })
+        .from(mahjongRoomMembers)
+        .innerJoin(mahjongRooms, eq(mahjongRoomMembers.roomId, mahjongRooms.id))
+        .where(eq(mahjongRoomMembers.userId, userId))
+        .orderBy(desc(mahjongRooms.createdAt), desc(mahjongRooms.id))
+        .limit(safeLimit)
+        .offset(safeOffset),
+      this.db
+        .select({ total: count() })
+        .from(mahjongRoomMembers)
+        .where(eq(mahjongRoomMembers.userId, userId)),
+    ]);
+    const total = Number(countRows[0]?.total || 0);
+    if (membershipRows.length === 0) {
+      return { rooms: [], total, hasMore: false, nextOffset: safeOffset };
+    }
 
     const roomIds = membershipRows.map((row) => row.room.id);
     const transactions = await this.db
@@ -154,7 +200,7 @@ export class ProfileService {
       totals.set(transaction.roomId, total);
     }
 
-    return membershipRows
+    const rooms = membershipRows
       .map(({ room }) => {
         const total = totals.get(room.id) ?? { netCents: 0, lastActivityAt: null };
         return {
@@ -165,8 +211,9 @@ export class ProfileService {
           lastActivityAt: (total.lastActivityAt ?? room.createdAt).toISOString(),
           myNetProfit: fromCents(total.netCents),
         };
-      })
-      .sort((left, right) => right.lastActivityAt.localeCompare(left.lastActivityAt));
+      });
+    const nextOffset = safeOffset + rooms.length;
+    return { rooms, total, hasMore: nextOffset < total, nextOffset };
   }
 
   async getMahjongOpponents(userId: string): Promise<MahjongOpponentRecord[]> {

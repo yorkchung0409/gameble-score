@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Param, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Headers, Param, Query, UnauthorizedException } from '@nestjs/common';
 import { MahjongService } from '@server/modules/mahjong/mahjong.service';
 import { ProfileService } from './profile.service';
 
@@ -15,13 +15,29 @@ export class ProfileController {
   }
 
   @Get('poker-ledgers')
-  async getPokerLedgers(@Headers('x-wx-openid') cloudOpenId?: string) {
-    return { ledgers: await this.profileService.getPokerLedgers(await this.resolveUserId(cloudOpenId)) };
+  async getPokerLedgers(
+    @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.profileService.getPokerLedgers(
+      await this.resolveUserId(cloudOpenId),
+      Number(limit),
+      Number(offset),
+    );
   }
 
   @Get('mahjong-rooms')
-  async getMahjongRooms(@Headers('x-wx-openid') cloudOpenId?: string) {
-    return { rooms: await this.profileService.getMahjongRooms(await this.resolveUserId(cloudOpenId)) };
+  async getMahjongRooms(
+    @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.profileService.getMahjongRooms(
+      await this.resolveUserId(cloudOpenId),
+      Number(limit),
+      Number(offset),
+    );
   }
 
   @Get('mahjong-opponents')
