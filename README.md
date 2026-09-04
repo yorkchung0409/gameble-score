@@ -98,11 +98,11 @@ npm start
 ### 方式三：微信云托管（小程序推荐）
 1. 在微信开发者工具中开通云开发环境，并在云托管中使用本仓库的 `Dockerfile` 部署服务。
 2. 服务名填写 `express-drsy`，容器端口填写 `3000`，访问方式选择仅小程序私有访问，不开启公网访问。
-3. 在同一云开发环境创建或关联 MySQL 实例；在该服务版本的环境变量中配置 `DB_HOST`、`DB_PORT`（通常为 `3306`）、`DB_USER`、`DB_PASSWORD`、`DB_NAME`。数据库密码只填写在控制台，不能提交到仓库。
+3. 在同一云开发环境创建或关联 MySQL 实例。云托管会自动提供 `MYSQL_ADDRESS`、`MYSQL_USERNAME`、`MYSQL_PASSWORD`，因此只需在服务环境变量中额外配置 `DB_NAME`（例如 `gameble_score`）。本地或其他平台则配置 `DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME`。
 4. 云托管会注入 `PORT`；应用在启动前会自动执行 `init.sql` 创建表结构。小程序通过 `wx.cloud.callContainer` 调用服务，因此不需要在小程序后台填写合法 request 域名，也不需要配置 `WECHAT_APP_SECRET`。
 5. 部署完成后查看 `/health` 云端调试接口，确认返回 `status: ok`，再在微信开发者工具运行小程序。
 
-云托管服务的环境变量只绑定到服务版本；`DB_PASSWORD` 属于密钥，应仅填写在云托管控制台，绝不能提交到 Git 仓库。
+云托管服务的环境变量只绑定到服务版本；`DB_PASSWORD` 和 `MYSQL_PASSWORD` 都属于密钥，应仅填写在云托管控制台，绝不能提交到 Git 仓库。
 
 ### 方式四：Vercel + MySQL
 - 前端部署到 Vercel
