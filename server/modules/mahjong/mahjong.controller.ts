@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Param,
 } from '@nestjs/common';
@@ -20,6 +21,9 @@ import type {
   UpdateRoomModeRequest,
   CreateTransactionRequest,
   ReverseTransactionRequest,
+  WeChatMiniProgramLoginRequest,
+  WeChatMiniProgramLoginResponse,
+  UpdateMahjongUserProfileRequest,
 } from '@shared/api.interface';
 
 @Controller('api/mahjong')
@@ -38,6 +42,21 @@ export class MahjongController {
     @Param('deviceId') deviceId: string,
   ): Promise<GetUserByDeviceResponse> {
     return this.mahjongService.getUserByDevice(deviceId);
+  }
+
+  @Post('auth/wechat')
+  async loginWithWeChatCode(
+    @Body() dto: WeChatMiniProgramLoginRequest,
+  ): Promise<WeChatMiniProgramLoginResponse> {
+    return this.mahjongService.loginWithWeChatCode(dto.code);
+  }
+
+  @Patch('users/:userId/profile')
+  async updateUserProfile(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateMahjongUserProfileRequest,
+  ): Promise<CreateUserResponse> {
+    return this.mahjongService.updateUserName(userId, dto.name);
   }
 
   // ---------- 房间相关 ----------

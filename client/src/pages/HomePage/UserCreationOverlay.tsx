@@ -53,61 +53,40 @@ const UserCreationOverlay = ({
   };
 
   return (
-    <div
-      className="min-h-screen w-full flex items-center justify-center px-5"
+    <section
+      className="rounded-xl p-5 mb-5"
       style={{
-        background: '#F4F6F1',
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E6EAE2',
+        boxShadow: '0 2px 12px rgba(30,40,34,0.08)',
       }}
     >
-      <div
-        className="w-full max-w-md rounded-xl p-8 shadow-lg"
-        style={{
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E6EAE2',
-          boxShadow: '0 2px 12px rgba(30,40,34,0.08)',
-        }}
-      >
-        <div className="text-center mb-8">
-          <h2
-            className="text-3xl font-bold mb-3"
-            style={{ color: '#B08D1E' }}
-          >
-            创建你的身份
-          </h2>
-          <p style={{ color: '#6B7A70' }}>
-            输入你的名字，在所有牌局中使用
-          </p>
-        </div>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div>
-            <label
-              className="block text-sm mb-2"
-              style={{ color: '#6B7A70' }}
-            >
-              姓名
-            </label>
-            <Input
-              type="text"
-              value={userNameInput}
-              onChange={(e) => setUserNameInput(e.target.value)}
-              placeholder="请输入你的名字"
-              style={{ color: '#222B26' }}
-            />
-          </div>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <label className="text-sm font-medium" style={{ color: '#222B26' }}>
+          设置昵称
+        </label>
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            value={userNameInput}
+            onChange={(e) => setUserNameInput(e.target.value)}
+            placeholder="请输入你的名字"
+            style={{ color: '#222B26' }}
+          />
           <Button
             type="submit"
             disabled={creating}
-            className="w-full font-semibold mt-2"
+            className="shrink-0 font-semibold"
             style={{
               backgroundColor: '#1E7A46',
               color: '#ffffff',
             }}
           >
-            {creating ? '创建中...' : '开始使用'}
+            {creating ? '创建中...' : '确认'}
           </Button>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </section>
   );
 };
 

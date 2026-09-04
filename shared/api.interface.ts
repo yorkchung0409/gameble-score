@@ -102,6 +102,19 @@ export interface GetUserByDeviceResponse {
   user: MahjongUser | null;
 }
 
+export interface WeChatMiniProgramLoginRequest {
+  code: string;
+}
+
+export interface WeChatMiniProgramLoginResponse {
+  user: MahjongUser;
+  isNewUser: boolean;
+}
+
+export interface UpdateMahjongUserProfileRequest {
+  name: string;
+}
+
 export interface MahjongSeat {
   seatIndex: number;
   userId: string;

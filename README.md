@@ -96,6 +96,12 @@ npm start
 - 数据库用 Supabase（PostgreSQL）
 - 后端需要单独部署（Vercel Serverless Functions 或其他平台）
 
+## 微信小程序
+
+`miniprogram/` 是可直接导入微信开发者工具的原生小程序项目。它使用 `wx.login` 获取临时 code，并由服务端使用 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET` 换取 openid；昵称通过小程序的 `input type="nickname"` 由用户主动填写。
+
+导入与部署说明见 [miniprogram/README.md](miniprogram/README.md)。小程序请求后端前，需要配置 HTTPS API 域名并在微信公众平台登记为合法 request 域名。
+
 ## 项目结构
 
 ```

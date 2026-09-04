@@ -72,16 +72,6 @@ const HomePage = () => {
     setSearchParams({ game: value });
   };
 
-  if (!currentUser) {
-    return (
-      <UserCreationOverlay
-        deviceId={deviceId}
-        onCreated={setCurrentUser}
-        createUser={mahjongApi.createUser}
-      />
-    );
-  }
-
   return (
     <div
       className="min-h-screen w-full flex justify-center items-start px-5 py-6"
@@ -91,16 +81,24 @@ const HomePage = () => {
     >
       <div className="w-full max-w-[520px]">
         <div className="flex items-center gap-3 mb-6 px-1" style={{ minHeight: 44 }}>
-          <span
-            className="h-10 w-10 rounded-full flex items-center justify-center text-base font-bold shrink-0"
-            style={{ backgroundColor: avatarColor(currentUser.id), color: '#ffffff' }}
-            aria-hidden="true"
-          >
-            {currentUser.name.trim().charAt(0) || '?'}
-          </span>
-          <span className="text-lg font-semibold" style={{ color: '#222B26' }}>
-            {currentUser.name}
-          </span>
+          {currentUser ? (
+            <>
+              <span
+                className="h-10 w-10 rounded-full flex items-center justify-center text-base font-bold shrink-0"
+                style={{ backgroundColor: avatarColor(currentUser.id), color: '#ffffff' }}
+                aria-hidden="true"
+              >
+                {currentUser.name.trim().charAt(0) || '?'}
+              </span>
+              <span className="text-lg font-semibold" style={{ color: '#222B26' }}>
+                {currentUser.name}
+              </span>
+            </>
+          ) : (
+            <span className="text-lg font-semibold" style={{ color: '#222B26' }}>
+              牌局记账
+            </span>
+          )}
           <span className="flex-1" />
           <button
             type="button"
@@ -116,6 +114,14 @@ const HomePage = () => {
             ?
           </button>
         </div>
+
+        {!currentUser && (
+          <UserCreationOverlay
+            deviceId={deviceId}
+            onCreated={setCurrentUser}
+            createUser={mahjongApi.createUser}
+          />
+        )}
 
         <Tabs
           value={gameType}

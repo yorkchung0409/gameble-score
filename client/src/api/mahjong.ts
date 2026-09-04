@@ -13,6 +13,7 @@ import type {
   UpdateRoomModeRequest,
   CreateTransactionRequest,
   ReverseTransactionRequest,
+  UpdateMahjongUserProfileRequest,
 } from '@shared/api.interface';
 
 const BASE = '/api/mahjong';
@@ -31,6 +32,17 @@ export async function getUserByDevice(
 ): Promise<GetUserByDeviceResponse> {
   const res = await apiClient.get<GetUserByDeviceResponse>(
     `${USERS_BASE}/by-device/${deviceId}`,
+  );
+  return res.data;
+}
+
+export async function updateUserProfile(
+  userId: string,
+  data: UpdateMahjongUserProfileRequest,
+): Promise<CreateUserResponse> {
+  const res = await apiClient.patch<CreateUserResponse>(
+    `${USERS_BASE}/${userId}/profile`,
+    data,
   );
   return res.data;
 }

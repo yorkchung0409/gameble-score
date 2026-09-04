@@ -9,6 +9,20 @@ export type DbType = ReturnType<typeof drizzle<typeof schema>>;
 // 幂等迁移：应用启动时自动补齐新增的表 / 列（对已存在的表不产生破坏）
 async function runStartupMigrations(queryClient: ReturnType<typeof postgres>) {
   await queryClient.unsafe(`
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_name_key;
+    DROP INDEX IF EXISTS users_name_key;
+    CREATE TABLE IF NOT EXISTS user_identities (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider VARCHAR(30) NOT NULL,
+      provider_subject VARCHAR(128) NOT NULL,
+      created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(provider, provider_subject)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id);
+    INSERT INTO user_identities (user_id, provider, provider_subject)
+    SELECT id, 'web_device', device_id FROM users
+    ON CONFLICT (provider, provider_subject) DO NOTHING;
     ALTER TABLE mahjong_rooms ADD COLUMN IF NOT EXISTS mode VARCHAR(20) NOT NULL DEFAULT 'seated';
     ALTER TABLE mahjong_rooms ADD COLUMN IF NOT EXISTS creator_user_id UUID;
     ALTER TABLE mahjong_rooms ADD COLUMN IF NOT EXISTS dissolved_at TIMESTAMP(6);

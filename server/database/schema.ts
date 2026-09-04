@@ -97,13 +97,39 @@ export const users = pgTable(
   'users',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    name: varchar('name', { length: 100 }).notNull().unique(),
+    name: varchar('name', { length: 100 }).notNull(),
     deviceId: varchar('device_id', { length: 100 }).notNull().unique(),
     createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    uniqueIndex('users_name_key').on(table.name),
     uniqueIndex('users_device_id_key').on(table.deviceId),
+  ],
+);
+
+/**
+ * 登录身份与展示资料分离。Web 继续使用设备 ID；小程序使用服务端换取的 openid。
+ * 后续接入其他平台时只需增加 provider，不必修改业务表的用户外键。
+ */
+export const userIdentities = pgTable(
+  'user_identities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull(),
+    provider: varchar('provider', { length: 30 }).notNull(),
+    providerSubject: varchar('provider_subject', { length: 128 }).notNull(),
+    createdAt: timestamp('created_at', { precision: 6 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('user_identities_provider_subject_key').on(
+      table.provider,
+      table.providerSubject,
+    ),
+    index('idx_user_identities_user_id').on(table.userId),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: 'user_identities_user_id_fkey',
+    }).onDelete('cascade'),
   ],
 );
 
@@ -240,3 +266,4 @@ export const playersTable = players;
 export const roomsTable = rooms;
 export const userRoomVisitsTable = userRoomVisits;
 export const usersTable = users;
+export const userIdentitiesTable = userIdentities;

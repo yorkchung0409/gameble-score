@@ -26,6 +26,10 @@ const MahjongPanel = () => {
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      toast.error('请先设置昵称');
+      return;
+    }
     setCreating(true);
     try {
       const res = await mahjongApi.createRoom({

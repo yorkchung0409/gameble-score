@@ -24,6 +24,7 @@ import {
   mahjongSeats,
   mahjongTransactions,
   mahjongRoomMembers,
+  userIdentities,
 } from '@server/database/schema';
 import { eq, desc, and, inArray, max, isNull } from 'drizzle-orm';
 import type {
@@ -36,6 +37,7 @@ import type {
   MahjongRoomMember,
   MahjongTransaction,
   CreateTransactionRequest,
+  WeChatMiniProgramLoginResponse,
 } from '@shared/api.interface';
 
 // 自动解散：30 分钟无转账解散；扫描间隔 15 分钟
@@ -181,6 +183,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         .insert(users)
         .values({ name: trimmedName, deviceId: normalizedDeviceId })
         .returning();
+      await this.addIdentity(row.id, 'web_device', normalizedDeviceId);
       return { user: toMahjongUser(row) };
     } catch (error) {
       const pgCode = extractPostgresErrorCode(error);
@@ -214,6 +217,87 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       return { user: null };
     }
     return { user: toMahjongUser(rows[0]) };
+  }
+
+  /**
+   * 小程序登录必须由服务端使用 AppSecret 交换 code；客户端不应直接请求微信登录接口。
+   * 这里仅建立业务身份，昵称仍由用户通过小程序的 nickname 输入能力主动填写。
+   */
+  async loginWithWeChatCode(code: string): Promise<WeChatMiniProgramLoginResponse> {
+    const normalizedCode = (code || '').trim();
+    if (!normalizedCode || normalizedCode.length > 512) {
+      throw new BadRequestException('微信登录凭证无效');
+    }
+
+    const appId = process.env.WECHAT_APP_ID;
+    const appSecret = process.env.WECHAT_APP_SECRET;
+    if (!appId || !appSecret) {
+      throw new BadRequestException('微信小程序登录尚未配置');
+    }
+
+    const query = new URLSearchParams({
+      appid: appId,
+      secret: appSecret,
+      js_code: normalizedCode,
+      grant_type: 'authorization_code',
+    });
+    let payload: { openid?: unknown; errcode?: unknown; errmsg?: unknown };
+    try {
+      const response = await fetch(
+        `https://api.weixin.qq.com/sns/jscode2session?${query.toString()}`,
+      );
+      payload = (await response.json()) as typeof payload;
+    } catch (error) {
+      this.logger.error('微信登录请求失败', error instanceof Error ? error.message : String(error));
+      throw new BadRequestException('微信登录服务暂不可用，请稍后重试');
+    }
+
+    if (typeof payload.openid !== 'string' || payload.openid.length === 0) {
+      this.logger.warn(`微信登录被拒绝: ${String(payload.errcode ?? payload.errmsg ?? 'unknown')}`);
+      throw new BadRequestException('微信登录失败，请重新进入小程序');
+    }
+
+    const existing = await this.findUserByIdentity('wechat_mini', payload.openid);
+    if (existing) {
+      return { user: toMahjongUser(existing), isNewUser: false };
+    }
+
+    // 保留 device_id 的非空约束以兼容现有数据库；真实身份以 user_identities 为准。
+    const [user] = await this.db
+      .insert(users)
+      .values({ name: '微信用户', deviceId: `wx:${payload.openid}` })
+      .returning();
+    try {
+      await this.addIdentity(user.id, 'wechat_mini', payload.openid);
+    } catch (error) {
+      if (extractPostgresErrorCode(error) === '23505') {
+        const concurrentUser = await this.findUserByIdentity('wechat_mini', payload.openid);
+        if (concurrentUser) {
+          return { user: toMahjongUser(concurrentUser), isNewUser: false };
+        }
+      }
+      throw error;
+    }
+    return { user: toMahjongUser(user), isNewUser: true };
+  }
+
+  async updateUserName(userId: string, name: string): Promise<CreateUserResponse> {
+    const normalizedName = (name || '').trim();
+    if (!normalizedName) {
+      throw new BadRequestException('用户名不能为空');
+    }
+    if (normalizedName.length > 30) {
+      throw new BadRequestException('用户名不能超过 30 个字符');
+    }
+    const [user] = await this.db
+      .update(users)
+      .set({ name: normalizedName })
+      .where(eq(users.id, userId))
+      .returning();
+    if (!user) {
+      throw new NotFoundException('用户不存在');
+    }
+    return { user: toMahjongUser(user) };
   }
 
   // ---------- 房间相关 ----------
@@ -706,6 +790,35 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     if (rows.length === 0) {
       throw new BadRequestException('用户不存在');
     }
+  }
+
+  private async addIdentity(
+    userId: string,
+    provider: 'web_device' | 'wechat_mini',
+    providerSubject: string,
+  ): Promise<void> {
+    await this.db.insert(userIdentities).values({
+      userId,
+      provider,
+      providerSubject,
+    });
+  }
+
+  private async findUserByIdentity(
+    provider: 'web_device' | 'wechat_mini',
+    providerSubject: string,
+  ): Promise<typeof users.$inferSelect | null> {
+    const rows = await this.db
+      .select({ user: users })
+      .from(userIdentities)
+      .innerJoin(users, eq(userIdentities.userId, users.id))
+      .where(
+        and(
+          eq(userIdentities.provider, provider),
+          eq(userIdentities.providerSubject, providerSubject),
+        ),
+      );
+    return rows[0]?.user ?? null;
   }
 
   // ---------- 转账记录相关 ----------

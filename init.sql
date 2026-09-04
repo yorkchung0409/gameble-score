@@ -43,10 +43,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS game_players_game_id_player_id_key ON game_pla
 -- 麻将模块
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) NOT NULL UNIQUE,
+  name VARCHAR(100) NOT NULL,
   device_id VARCHAR(100) NOT NULL UNIQUE,
   created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS user_identities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider VARCHAR(30) NOT NULL,
+  provider_subject VARCHAR(128) NOT NULL,
+  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(provider, provider_subject)
+);
+CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id);
 
 CREATE TABLE IF NOT EXISTS mahjong_rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
