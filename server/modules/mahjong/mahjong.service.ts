@@ -43,8 +43,8 @@ import type {
   WeChatMiniProgramLoginResponse,
 } from '@shared/api.interface';
 
-// 自动解散：30 分钟无转账解散；扫描间隔 5 分钟
-const DISSOLVE_SCAN_INTERVAL_MS = 5 * 60 * 1000;
+// 自动解散：30 分钟无转账解散；后台扫描间隔 15 分钟，打开房间时会即时检查
+const DISSOLVE_SCAN_INTERVAL_MS = 15 * 60 * 1000;
 const DISSOLVE_IDLE_MS = 30 * 60 * 1000;
 
 function toMahjongUser(row: typeof users.$inferSelect): MahjongUser {
