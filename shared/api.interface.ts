@@ -83,6 +83,76 @@ export interface CreateGameResponse {
   game: Game;
 }
 
+export interface PokerLeaderboardEntry {
+  playerId: string;
+  playerName: string;
+  netProfit: string;
+  winTotal: string;
+  lossTotal: string;
+  gameCount: number;
+}
+
+export interface MiniPokerLedgerDetailResponse extends RoomDetailResponse {
+  selfPlayerId: string | null;
+  leaderboard: PokerLeaderboardEntry[];
+}
+
+export interface PersonalSummaryResponse {
+  user: MahjongUser;
+  totalNetProfit: string;
+  poker: {
+    netProfit: string;
+    gameCount: number;
+    ledgerCount: number;
+    trackedLedgerCount: number;
+  };
+  mahjong: {
+    netProfit: string;
+    winTotal: string;
+    lossTotal: string;
+    roomCount: number;
+    opponentCount: number;
+    teaFeeTotal: string;
+  };
+}
+
+export interface PersonalPokerLedgerRecord {
+  room: Room;
+  selfPlayerId: string | null;
+  myNetProfit: string;
+  myGameCount: number;
+}
+
+export interface PersonalMahjongRoomRecord {
+  roomCode: string;
+  roomName: string;
+  createdAt: string;
+  dissolvedAt: string | null;
+  lastActivityAt: string;
+  myNetProfit: string;
+}
+
+export interface MahjongOpponentRecord {
+  userId: string;
+  userName: string;
+  netProfit: string;
+  winTotal: string;
+  lossTotal: string;
+  roomCount: number;
+  transactionCount: number;
+  lastPlayedAt: string;
+}
+
+export interface MahjongOpponentHistoryRecord {
+  id: string;
+  roomCode: string;
+  roomName: string;
+  amount: string;
+  netProfit: string;
+  createdAt: string;
+  reversalOf: string | null;
+}
+
 export interface MahjongUser {
   id: string;
   name: string;

@@ -6,6 +6,7 @@ import { GlobalExceptionFilter } from './common/filters/exception.filter';
 import { PokerModule } from './modules/poker/poker.module';
 import { MahjongModule } from './modules/mahjong/mahjong.module';
 import { RoomVisitsModule } from './modules/room-visits/room-visits.module';
+import { ProfileModule } from './modules/profile/profile.module';
 import { ViewModule } from './modules/view/view.module';
 
 @Module({
@@ -14,6 +15,7 @@ import { ViewModule } from './modules/view/view.module';
     PokerModule,
     MahjongModule,
     RoomVisitsModule,
+    ProfileModule,
     ViewModule,
   ],
   providers: [

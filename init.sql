@@ -58,6 +58,17 @@ CREATE TABLE IF NOT EXISTS user_identities (
   INDEX idx_user_identities_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS poker_ledger_owners (
+  room_id CHAR(36) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
+  self_player_id CHAR(36) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT poker_ledger_owners_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+  CONSTRAINT poker_ledger_owners_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT poker_ledger_owners_self_player_id_fkey FOREIGN KEY (self_player_id) REFERENCES players(id) ON DELETE SET NULL,
+  INDEX idx_poker_ledger_owners_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS mahjong_rooms (
   id CHAR(36) PRIMARY KEY,
   room_code VARCHAR(50) NOT NULL UNIQUE,

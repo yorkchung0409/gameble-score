@@ -5,5 +5,6 @@ import { MahjongService } from './mahjong.service';
 @Module({
   controllers: [MahjongController],
   providers: [MahjongService],
+  exports: [MahjongService],
 })
 export class MahjongModule {}

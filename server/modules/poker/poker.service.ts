@@ -17,7 +17,13 @@ import {
   toCents,
   fromCents,
 } from '@server/common/utils';
-import { rooms, players, games, gamePlayers } from '@server/database/schema';
+import {
+  rooms,
+  players,
+  games,
+  gamePlayers,
+  pokerLedgerOwners,
+} from '@server/database/schema';
 import { eq, desc, inArray, and, sql, sum } from 'drizzle-orm';
 import type {
   Room,
@@ -29,6 +35,8 @@ import type {
   CreateGameRequest,
   UpdateGameRequest,
   CreateGameResponse,
+  MiniPokerLedgerDetailResponse,
+  PokerLeaderboardEntry,
 } from '@shared/api.interface';
 
 function toRoom(row: typeof rooms.$inferSelect): Room {
@@ -402,6 +410,228 @@ export class PokerService {
 
     await this.touchRoom(roomId);
     return result;
+  }
+
+  async createPrivateRoom(
+    userId: string,
+    roomCode: string | undefined,
+    roomName: string,
+  ): Promise<CreateRoomResponse> {
+    const result = await this.createRoom(roomCode, roomName, 'texas');
+    await this.db.insert(pokerLedgerOwners).values({
+      roomId: result.room.id,
+      userId,
+    });
+    return result;
+  }
+
+  async getPublicRoomDetail(roomCode: string): Promise<RoomDetailResponse> {
+    await this.assertPublicRoom(roomCode);
+    return this.getRoomDetail(roomCode);
+  }
+
+  async updatePublicRoom(roomCode: string, roomName: string): Promise<{ room: Room }> {
+    await this.assertPublicRoom(roomCode);
+    return this.updateRoom(roomCode, roomName);
+  }
+
+  async addPublicPlayer(roomCode: string, name: string): Promise<Player> {
+    await this.assertPublicRoom(roomCode);
+    return this.addPlayer(roomCode, name);
+  }
+
+  async deletePublicPlayer(roomCode: string, playerId: string): Promise<void> {
+    await this.assertPublicRoom(roomCode);
+    return this.deletePlayer(roomCode, playerId);
+  }
+
+  async createPublicGame(roomCode: string, dto: CreateGameRequest): Promise<CreateGameResponse> {
+    await this.assertPublicRoom(roomCode);
+    return this.createGame(roomCode, dto);
+  }
+
+  async updatePublicGame(
+    roomCode: string,
+    gameId: string,
+    dto: UpdateGameRequest,
+  ): Promise<CreateGameResponse> {
+    await this.assertPublicRoom(roomCode);
+    return this.updateGame(roomCode, gameId, dto);
+  }
+
+  async deletePublicGame(roomCode: string, gameId: string): Promise<void> {
+    await this.assertPublicRoom(roomCode);
+    return this.deleteGame(roomCode, gameId);
+  }
+
+  async listPrivateRooms(userId: string): Promise<
+    Array<{ room: Room; selfPlayerId: string | null }>
+  > {
+    const rows = await this.db
+      .select({
+        room: rooms,
+        selfPlayerId: pokerLedgerOwners.selfPlayerId,
+      })
+      .from(pokerLedgerOwners)
+      .innerJoin(rooms, eq(pokerLedgerOwners.roomId, rooms.id))
+      .where(eq(pokerLedgerOwners.userId, userId))
+      .orderBy(desc(rooms.updatedAt));
+
+    return rows.map((row) => ({
+      room: toRoom(row.room),
+      selfPlayerId: row.selfPlayerId ?? null,
+    }));
+  }
+
+  async getPrivateRoomDetail(
+    userId: string,
+    roomCode: string,
+  ): Promise<MiniPokerLedgerDetailResponse> {
+    const owner = await this.getPrivateOwner(userId, roomCode);
+    const detail = await this.getRoomDetail(roomCode);
+    return {
+      ...detail,
+      selfPlayerId: owner.selfPlayerId ?? null,
+      leaderboard: this.buildLeaderboard(detail),
+    };
+  }
+
+  async updatePrivateRoom(
+    userId: string,
+    roomCode: string,
+    roomName: string,
+  ): Promise<{ room: Room }> {
+    await this.getPrivateOwner(userId, roomCode);
+    return this.updateRoom(roomCode, roomName);
+  }
+
+  async addPrivatePlayer(userId: string, roomCode: string, name: string): Promise<Player> {
+    await this.getPrivateOwner(userId, roomCode);
+    return this.addPlayer(roomCode, name);
+  }
+
+  async deletePrivatePlayer(
+    userId: string,
+    roomCode: string,
+    playerId: string,
+  ): Promise<void> {
+    await this.getPrivateOwner(userId, roomCode);
+    return this.deletePlayer(roomCode, playerId);
+  }
+
+  async createPrivateGame(
+    userId: string,
+    roomCode: string,
+    dto: CreateGameRequest,
+  ): Promise<CreateGameResponse> {
+    await this.getPrivateOwner(userId, roomCode);
+    return this.createGame(roomCode, dto);
+  }
+
+  async updatePrivateGame(
+    userId: string,
+    roomCode: string,
+    gameId: string,
+    dto: UpdateGameRequest,
+  ): Promise<CreateGameResponse> {
+    await this.getPrivateOwner(userId, roomCode);
+    return this.updateGame(roomCode, gameId, dto);
+  }
+
+  async deletePrivateGame(userId: string, roomCode: string, gameId: string): Promise<void> {
+    await this.getPrivateOwner(userId, roomCode);
+    return this.deleteGame(roomCode, gameId);
+  }
+
+  async updatePrivateSelfPlayer(
+    userId: string,
+    roomCode: string,
+    selfPlayerId: string | null,
+  ): Promise<{ selfPlayerId: string | null }> {
+    const owner = await this.getPrivateOwner(userId, roomCode);
+    if (selfPlayerId) {
+      const matches = await this.db
+        .select({ id: players.id })
+        .from(players)
+        .where(and(eq(players.id, selfPlayerId), eq(players.roomId, owner.roomId)));
+      if (matches.length === 0) {
+        throw new BadRequestException('请选择本账本内的参与者');
+      }
+    }
+    await this.db
+      .update(pokerLedgerOwners)
+      .set({ selfPlayerId })
+      .where(eq(pokerLedgerOwners.roomId, owner.roomId));
+    return { selfPlayerId };
+  }
+
+  private async getPrivateOwner(userId: string, roomCode: string) {
+    const rows = await this.db
+      .select({
+        roomId: pokerLedgerOwners.roomId,
+        selfPlayerId: pokerLedgerOwners.selfPlayerId,
+      })
+      .from(pokerLedgerOwners)
+      .innerJoin(rooms, eq(pokerLedgerOwners.roomId, rooms.id))
+      .where(
+        and(
+          eq(pokerLedgerOwners.userId, userId),
+          eq(rooms.roomCode, roomCode.toUpperCase()),
+        ),
+      );
+    if (rows.length === 0) {
+      throw new NotFoundException('账本不存在或无访问权限');
+    }
+    return rows[0];
+  }
+
+  private async assertPublicRoom(roomCode: string): Promise<void> {
+    const privateRows = await this.db
+      .select({ roomId: pokerLedgerOwners.roomId })
+      .from(pokerLedgerOwners)
+      .innerJoin(rooms, eq(pokerLedgerOwners.roomId, rooms.id))
+      .where(eq(rooms.roomCode, roomCode.toUpperCase()));
+    if (privateRows.length > 0) {
+      throw new NotFoundException('账本不存在');
+    }
+  }
+
+  private buildLeaderboard(detail: RoomDetailResponse): PokerLeaderboardEntry[] {
+    const totals = new Map<
+      string,
+      { playerName: string; netCents: number; winCents: number; lossCents: number; gameIds: Set<string> }
+    >();
+    for (const game of detail.games) {
+      for (const gamePlayer of game.players) {
+        const current = totals.get(gamePlayer.playerId) ?? {
+          playerName: gamePlayer.playerName,
+          netCents: 0,
+          winCents: 0,
+          lossCents: 0,
+          gameIds: new Set<string>(),
+        };
+        const netCents = toCents(gamePlayer.netProfit);
+        current.netCents += netCents;
+        if (netCents > 0) current.winCents += netCents;
+        if (netCents < 0) current.lossCents += Math.abs(netCents);
+        current.gameIds.add(game.id);
+        totals.set(gamePlayer.playerId, current);
+      }
+    }
+
+    return Array.from(totals.entries())
+      .map(([playerId, total]) => ({
+        playerId,
+        playerName: total.playerName,
+        netProfit: fromCents(total.netCents),
+        winTotal: fromCents(total.winCents),
+        lossTotal: fromCents(total.lossCents),
+        gameCount: total.gameIds.size,
+      }))
+      .sort((left, right) => {
+        const netDifference = toCents(right.netProfit) - toCents(left.netProfit);
+        return netDifference !== 0 ? netDifference : left.playerName.localeCompare(right.playerName, 'zh-CN');
+      });
   }
 
   async updateGame(

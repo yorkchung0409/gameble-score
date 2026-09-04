@@ -40,7 +40,7 @@ export class PokerController {
   async getRoomDetail(
     @Param('roomCode') roomCode: string,
   ): Promise<RoomDetailResponse> {
-    return this.pokerService.getRoomDetail(roomCode);
+    return this.pokerService.getPublicRoomDetail(roomCode);
   }
 
   @Patch('rooms/:roomCode')
@@ -49,9 +49,9 @@ export class PokerController {
     @Body() dto: UpdateRoomRequest,
   ): Promise<{ room: import('@shared/api.interface').Room }> {
     if (dto.roomName === undefined) {
-      return this.pokerService.getRoomDetail(roomCode).then((d) => ({ room: d.room }));
+      return this.pokerService.getPublicRoomDetail(roomCode).then((d) => ({ room: d.room }));
     }
-    return this.pokerService.updateRoom(roomCode, dto.roomName);
+    return this.pokerService.updatePublicRoom(roomCode, dto.roomName);
   }
 
   @Post('rooms/:roomCode/players')
@@ -59,7 +59,7 @@ export class PokerController {
     @Param('roomCode') roomCode: string,
     @Body() dto: CreatePlayerRequest,
   ): Promise<Player> {
-    return this.pokerService.addPlayer(roomCode, dto.name);
+    return this.pokerService.addPublicPlayer(roomCode, dto.name);
   }
 
   @Delete('rooms/:roomCode/players/:playerId')
@@ -68,7 +68,7 @@ export class PokerController {
     @Param('roomCode') roomCode: string,
     @Param('playerId') playerId: string,
   ): Promise<void> {
-    await this.pokerService.deletePlayer(roomCode, playerId);
+    await this.pokerService.deletePublicPlayer(roomCode, playerId);
   }
 
   @Post('rooms/:roomCode/games')
@@ -76,7 +76,7 @@ export class PokerController {
     @Param('roomCode') roomCode: string,
     @Body() dto: CreateGameRequest,
   ): Promise<CreateGameResponse> {
-    return this.pokerService.createGame(roomCode, dto);
+    return this.pokerService.createPublicGame(roomCode, dto);
   }
 
   @Put('rooms/:roomCode/games/:gameId')
@@ -85,7 +85,7 @@ export class PokerController {
     @Param('gameId') gameId: string,
     @Body() dto: UpdateGameRequest,
   ): Promise<CreateGameResponse> {
-    return this.pokerService.updateGame(roomCode, gameId, dto);
+    return this.pokerService.updatePublicGame(roomCode, gameId, dto);
   }
 
   @Delete('rooms/:roomCode/games/:gameId')
@@ -94,6 +94,6 @@ export class PokerController {
     @Param('roomCode') roomCode: string,
     @Param('gameId') gameId: string,
   ): Promise<void> {
-    await this.pokerService.deleteGame(roomCode, gameId);
+    await this.pokerService.deletePublicGame(roomCode, gameId);
   }
 }

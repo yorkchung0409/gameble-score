@@ -104,6 +104,26 @@ export const userIdentities = mysqlTable(
   ],
 );
 
+/**
+ * 小程序德州账本是创建者私有的手工账本。参与者只存在于账本内，
+ * 不与微信身份绑定；selfPlayerId 仅标记账本所有者在名单中对应谁。
+ */
+export const pokerLedgerOwners = mysqlTable(
+  'poker_ledger_owners',
+  {
+    roomId: varchar('room_id', { length: 36 }).primaryKey(),
+    userId: varchar('user_id', { length: 36 }).notNull(),
+    selfPlayerId: varchar('self_player_id', { length: 36 }),
+    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_poker_ledger_owners_user_id').on(table.userId),
+    foreignKey({ columns: [table.roomId], foreignColumns: [rooms.id], name: 'poker_ledger_owners_room_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'poker_ledger_owners_user_id_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.selfPlayerId], foreignColumns: [players.id], name: 'poker_ledger_owners_self_player_id_fkey' }).onDelete('set null'),
+  ],
+);
+
 export const mahjongRooms = mysqlTable(
   'mahjong_rooms',
   {
@@ -201,6 +221,7 @@ export const mahjongRoomMembersTable = mahjongRoomMembers;
 export const mahjongSeatsTable = mahjongSeats;
 export const mahjongTransactionsTable = mahjongTransactions;
 export const playersTable = players;
+export const pokerLedgerOwnersTable = pokerLedgerOwners;
 export const roomsTable = rooms;
 export const userRoomVisitsTable = userRoomVisits;
 export const usersTable = users;
