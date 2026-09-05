@@ -362,6 +362,7 @@ const MahjongRoomPage = () => {
         ) : (
           <SeatSection
             seats={data.seats}
+            balances={data.stats.balances}
             currentUserId={currentUserId}
             onSitDown={handleSitDown}
             onLeaveSeat={handleLeaveSeat}

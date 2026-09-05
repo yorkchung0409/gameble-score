@@ -1,9 +1,10 @@
 import type { MahjongSeat } from '@shared/api.interface';
 import { Button } from '@client/src/components/ui/button';
-import { Plus, LogOut } from 'lucide-react';
+import { ArrowRightLeft, LogOut, Plus } from 'lucide-react';
 
 interface SeatSectionProps {
   seats: MahjongSeat[];
+  balances: { userId: string; userName: string; balance: string }[];
   currentUserId: string;
   onSitDown: (seatIndex: number) => void;
   onLeaveSeat: () => void;
@@ -12,11 +13,21 @@ interface SeatSectionProps {
   currentUserSeated: boolean;
 }
 
-const SEAT_COUNT = 4;
-const SEAT_NAMES = ['东位', '南位', '西位', '北位'];
+const SEAT_LAYOUT = [
+  { seatIndex: 3, name: '北', gridArea: '1 / 2' },
+  { seatIndex: 0, name: '东', gridArea: '2 / 3' },
+  { seatIndex: 1, name: '南', gridArea: '3 / 2' },
+  { seatIndex: 2, name: '西', gridArea: '2 / 1' },
+] as const;
+
+function formatScore(value: string | undefined) {
+  const amount = Number(value) || 0;
+  return `${amount > 0 ? '+' : ''}${amount.toFixed(2)}`;
+}
 
 const SeatSection = ({
   seats,
+  balances,
   currentUserId,
   onSitDown,
   onLeaveSeat,
@@ -25,118 +36,103 @@ const SeatSection = ({
   currentUserSeated,
 }: SeatSectionProps) => {
   const seatMap = new Map<number, MahjongSeat>();
-  seats.forEach((s: MahjongSeat) => seatMap.set(s.seatIndex, s));
+  seats.forEach((seat) => seatMap.set(seat.seatIndex, seat));
+  const balanceMap = new Map(balances.map((balance) => [balance.userId, balance.balance]));
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
-      {Array.from({ length: SEAT_COUNT }).map((_, idx: number) => {
-        const seat = seatMap.get(idx);
-        const isMe = seat && seat.userId === currentUserId;
-        const isOccupied = !!seat;
-
-        return (
-          <div
-            key={idx}
-            className="rounded-xl p-2.5 flex flex-col items-center relative"
-            style={{
-              backgroundColor: '#FFFFFF',
-              border: isMe
-                ? '2px solid #1E7A46'
-                : '1px solid #E6EAE2',
-              boxShadow: isMe
-                ? '0 4px 20px rgba(30,122,70,0.28)'
-                : '0 2px 12px rgba(30,40,34,0.08)',
-            }}
-          >
-            <div
-              className="text-[10px] mb-1.5 font-medium"
-              style={{ color: '#6B7A70' }}
-            >
-              {SEAT_NAMES[idx]}
-            </div>
-            {isOccupied ? (
-              <>
-                <div
-                  className="text-sm font-semibold mb-2 text-center truncate w-full"
-                  style={{ color: '#222B26' }}
-                  title={seat.userName}
-                >
-                  {seat.userName}
-                  {isMe && (
-                    <span
-                      className="text-[10px] ml-0.5"
-                      style={{ color: '#B08D1E' }}
-                    >
-                      （我）
-                    </span>
-                  )}
-                </div>
-                {isMe ? (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-7 w-7 [&_svg]:size-3.5"
-                    style={{
-                      color: '#E5484D',
-                      borderColor: 'rgba(229,72,77,0.4)',
-                    }}
-                    onClick={onLeaveSeat}
-                    aria-label="离开座位"
-                  >
-                    <LogOut />
-                  </Button>
-                ) : currentUserSeated ? (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-7 w-7 [&_svg]:size-3.5"
-                    style={{
-                      color: '#B08D1E',
-                      borderColor: 'rgba(176,141,30,0.4)',
-                    }}
-                    onClick={() => onQuickTransfer(seat.userId)}
-                    aria-label="转账"
-                    title={`向 ${seat.userName} 转账`}
-                  >
-                                                            <svg
-                      viewBox="0 0 1024 1024"
-                      fill="currentColor"
-                      className="size-3.5"
-                      aria-hidden="true"
-                    >
-                      <path d="M545.3824 468.1984v79.2576h125.1584c16.6656 0 31.2832 14.592 31.2832 31.2832s-14.592 31.3088-31.2832 31.3088h-125.184v141.824c0 16.6912-14.592 31.3088-31.2576 31.3088-16.6912 0-31.3088-14.592-31.3088-31.3088v-141.824H357.632c-16.6656 0-31.2832-14.592-31.2832-31.3088 0-16.6656 14.592-31.2832 31.2832-31.2832h125.184V468.224h-125.184c-16.6656 0-31.2832-14.592-31.2832-31.2832s14.592-31.3088 31.2832-31.3088h81.3568l-75.0848-75.0848a30.2336 30.2336 0 0 1 0-43.8016 30.2336 30.2336 0 0 1 43.8016 0l98.048 98.048c4.1728 4.1728 6.2464 8.3456 8.3456 14.592 2.0736-4.1728 4.1472-8.3456 8.32-12.5184L622.592 286.72a30.2336 30.2336 0 0 1 43.776 0 30.2336 30.2336 0 0 1 0 43.8016l-75.0848 75.0848h81.3568c16.6912 0 31.2832 14.592 31.2832 31.3088 0 16.6912-14.592 31.2832-31.2832 31.2832h-127.232z m346.2656-8.3456c-45.9008-29.184-52.1472-35.456-52.1472-35.456-27.136-20.864-22.9632-45.9008 10.4192-56.32l114.7392-35.456s6.2464 6.2464 20.8384 64.6656c14.592 58.3936 14.592 100.096 14.592 100.096 2.0992 22.9632-12.4928 31.3088-31.2832 16.7168 0 0-52.1472-39.6544-77.1584-54.2464zM111.5136 591.2576c47.9744 27.136 60.4928 37.5552 60.4928 37.5552 29.184 18.7648 27.1104 41.728-6.272 54.2464l-112.64 35.456s-8.3456-8.3456-25.0368-64.6656c-16.6912-56.32-16.6912-104.2944-16.6912-104.2944-2.0736-22.9632 12.544-29.2096 29.2096-14.592 0 0 47.9744 41.7024 70.912 56.32zM17.6384 426.496c0-2.0736 2.0736-22.9376 8.3456-22.9376H23.8848h2.0992c2.0736-10.4192 14.592-16.6912 25.0368-12.5184 0 0 2.0736 4.1728 14.592 2.0992 12.5184-2.0992 43.8016-20.864 43.8016-20.864 10.4192-6.272 16.6912 0 12.5184 10.4192l-8.3456 33.3824c-2.0736 10.4192-14.592 20.864-25.0368 20.864H30.1568c-12.544 0-14.592-6.272-12.544-10.4448 0 0 0 2.0992 0 0z m878.1824 200.2688c2.0736-4.1728 0-2.0992 0 0 2.0736-12.544 12.5184-22.9632 25.0112-22.9632h56.32c10.4448 0 16.6912 8.3456 14.592 18.7904l-12.4928 37.5296c-6.272 12.544-16.6912 18.7904-29.184 18.7904l-48-6.272c-10.4192-2.0736-16.6912-10.4192-14.592-22.9376 0 0 8.3456-18.7904 8.3456-22.9376z m-869.8368 14.592C80.2048 858.2656 274.176 1018.88 505.728 1018.88c206.5152 0 383.8208-129.3312 458.9312-310.784 8.32-20.864 16.6656-43.8272 22.9376-66.7648h-91.776c-52.1472 166.8608-206.5152 287.8464-390.0672 287.8464S165.7344 808.192 113.5872 641.3312H25.984zM19.712 420.224a636.928 636.928 0 0 1 14.592-60.4928C99.0208 157.3888 284.672 11.392 505.7792 11.392c225.28 0 417.1776 154.368 475.5712 365.0304 4.1728 14.592 8.3456 29.184 10.4448 43.776h-91.776C856.1664 238.7712 695.552 105.2672 503.6544 105.2672c-191.8976 0-354.6112 133.504-396.3136 314.9824H19.712z m525.6704 47.9744v79.2576h125.1584c16.6656 0 31.2832 14.592 31.2832 31.2832s-14.592 31.3088-31.2832 31.3088h-125.184v141.824c0 16.6912-14.592 31.3088-31.2576 31.3088-16.6912 0-31.3088-14.592-31.3088-31.3088v-141.824H357.632c-16.6656 0-31.2832-14.592-31.2832-31.3088 0-16.6656 14.592-31.2832 31.2832-31.2832h125.184V468.224h-125.184c-16.6656 0-31.2832-14.592-31.2832-31.2832s14.592-31.2832 31.2832-31.2832h81.3568l-75.0848-75.1104a30.2336 30.2336 0 0 1 0-43.776 30.2336 30.2336 0 0 1 43.776 0l98.048 98.0224c4.1984 4.1728 6.272 8.3456 8.3712 14.592 2.0736-4.1728 4.1472-8.3456 8.32-12.5184l100.1472-100.096a30.2336 30.2336 0 0 1 43.776 0 30.2336 30.2336 0 0 1 0 43.776l-75.0848 75.1104h81.3568c16.6912 0 31.2832 14.592 31.2832 31.2832s-14.592 31.2832-31.2832 31.2832h-127.232z m346.2656-8.3456c-45.9008-29.184-52.1472-35.456-52.1472-35.456-27.136-20.864-22.9632-45.9008 10.4192-56.32l114.7392-35.456s6.2464 6.2464 20.8384 64.6656c14.592 58.3936 14.592 100.096 14.592 100.096 2.0992 22.9632-12.4928 31.3088-31.2832 16.7168 0 0-52.1472-39.6544-77.1584-54.2464zM111.5136 591.2576c47.9744 27.136 60.4928 37.5552 60.4928 37.5552 29.184 18.7648 27.1104 41.728-6.272 54.2464l-112.64 35.456s-8.3456-8.3456-25.0368-64.6656c-16.6912-56.32-16.6912-104.2944-16.6912-104.2944-2.0736-22.9632 12.544-29.2096 29.2096-14.592 0 0 47.9744 41.7024 70.912 56.32zM17.6384 426.496c0-2.0736 2.0736-22.9376 8.3456-22.9376H23.8848h2.0992c2.0736-10.4192 14.592-16.6912 25.0368-12.5184 0 0 2.0736 4.1728 14.592 2.0992 12.5184-2.0992 43.8016-20.864 43.8016-20.864 10.4192-6.272 16.6912 0 12.5184 10.4192l-8.3456 33.3824c-2.0736 10.4192-14.592 20.864-25.0368 20.864H30.1568c-12.544 0-14.592-6.272-12.544-10.4448 0 0 0 2.0992 0 0z m878.1824 200.2688c2.0736-4.1728 0-2.0992 0 0 2.0736-12.544 12.5184-22.9632 25.0112-22.9632h56.32c10.4448 0 16.6912 8.3456 14.592 18.7904l-12.4928 37.5296c-6.272 12.544-16.6912 18.7904-29.184 18.7904l-48-6.272c-10.4192-2.0736-16.6912-10.4192-14.592-22.9376 0 0 8.3456-18.7648 8.3456-22.9376z" />
-                    </svg>
-                  </Button>
-                ) : (
-                  <div className="h-7 w-7" />
-                )}
-              </>
-            ) : (
-              <>
-                <div
-                  className="text-sm mb-2"
-                  style={{ color: '#6B7A70' }}
-                >
-                  空位
-                </div>
-                <Button
-                  size="icon"
-                  className="h-7 w-7 [&_svg]:size-3.5"
-                  style={{
-                    backgroundColor: '#1E7A46',
-                    color: '#ffffff',
-                  }}
-                  onClick={() => onSitDown(idx)}
-                  disabled={!canInteract}
-                  aria-label="坐下"
-                >
-                  <Plus />
-                </Button>
-              </>
-            )}
+    <div className="mb-6">
+      <div
+        className="grid w-full max-w-[430px] mx-auto gap-1.5"
+        style={{
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(96px, 1.08fr) minmax(0, 1fr)',
+          gridTemplateRows: 'minmax(108px, 1fr) minmax(108px, 1fr) minmax(108px, 1fr)',
+        }}
+      >
+        <div
+          className="flex flex-col items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white shadow-inner"
+          style={{ gridArea: '2 / 2' }}
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl font-bold text-emerald-700">
+            雀
           </div>
-        );
-      })}
+          <span className="mt-2 text-[11px] text-emerald-50">坐下模式</span>
+        </div>
+
+        {SEAT_LAYOUT.map(({ seatIndex, name, gridArea }) => {
+          const seat = seatMap.get(seatIndex);
+          const isMe = seat?.userId === currentUserId;
+          const scoreValue = seat ? balanceMap.get(seat.userId) : undefined;
+          const score = Number(scoreValue) || 0;
+
+          return (
+            <div
+              key={seatIndex}
+              className="flex min-w-0 flex-col items-center justify-center rounded-lg border bg-white px-1.5 py-2 text-center shadow-sm"
+              style={{
+                gridArea,
+                borderColor: isMe ? '#1E7A46' : '#E1E6E1',
+                borderWidth: isMe ? 2 : 1,
+                boxShadow: isMe ? '0 4px 14px rgba(30,122,70,0.18)' : undefined,
+              }}
+            >
+              <span className="text-sm font-bold text-emerald-700">{name}</span>
+              {seat ? (
+                <>
+                  <span className="mt-0.5 w-full truncate text-xs font-semibold text-[#222B26]" title={seat.userName}>
+                    {seat.userName}{isMe ? '（我）' : ''}
+                  </span>
+                  <span className="mt-1 text-[10px] text-[#7A867E]">输赢积分</span>
+                  <span
+                    className="font-mono text-sm font-bold"
+                    style={{ color: score > 0 ? '#168447' : score < 0 ? '#C3443C' : '#59665E' }}
+                  >
+                    {formatScore(scoreValue)}
+                  </span>
+                  {isMe ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="mt-1 h-6 w-6 [&_svg]:size-3"
+                      style={{ color: '#C3443C', borderColor: '#E7B9B6' }}
+                      onClick={onLeaveSeat}
+                      aria-label="离开座位"
+                      title="离开座位"
+                    >
+                      <LogOut />
+                    </Button>
+                  ) : currentUserSeated ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="mt-1 h-6 w-6 [&_svg]:size-3"
+                      style={{ color: '#967A20', borderColor: '#DDCE99' }}
+                      onClick={() => onQuickTransfer(seat.userId)}
+                      aria-label={`向 ${seat.userName} 转账`}
+                      title={`向 ${seat.userName} 转账`}
+                    >
+                      <ArrowRightLeft />
+                    </Button>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <span className="my-1.5 text-xs text-[#8A958D]">空位</span>
+                  <Button
+                    size="icon"
+                    className="h-7 w-7 bg-emerald-700 text-white hover:bg-emerald-800 [&_svg]:size-3.5"
+                    onClick={() => onSitDown(seatIndex)}
+                    disabled={!canInteract}
+                    aria-label={`坐到${name}位`}
+                    title={`坐到${name}位`}
+                  >
+                    <Plus />
+                  </Button>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
