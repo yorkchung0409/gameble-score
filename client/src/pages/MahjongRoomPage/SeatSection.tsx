@@ -44,15 +44,15 @@ const SeatSection = ({
       <div
         className="grid w-full max-w-[430px] mx-auto gap-1.5"
         style={{
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(96px, 1.08fr) minmax(0, 1fr)',
-          gridTemplateRows: 'minmax(108px, 1fr) minmax(108px, 1fr) minmax(108px, 1fr)',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(88px, 1.08fr) minmax(0, 1fr)',
+          gridTemplateRows: 'repeat(3, 92px)',
         }}
       >
         <div
-          className="flex flex-col items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white shadow-inner"
-          style={{ gridArea: '2 / 2' }}
+          className="mx-auto flex h-[86px] w-[86px] flex-col items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white shadow-inner"
+          style={{ gridArea: '2 / 2', alignSelf: 'center' }}
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl font-bold text-emerald-700">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-bold text-emerald-700">
             雀
           </div>
           <span className="mt-2 text-[11px] text-emerald-50">坐下模式</span>
@@ -81,9 +81,8 @@ const SeatSection = ({
                   <span className="mt-0.5 w-full truncate text-xs font-semibold text-[#222B26]" title={seat.userName}>
                     {seat.userName}{isMe ? '（我）' : ''}
                   </span>
-                  <span className="mt-1 text-[10px] text-[#7A867E]">输赢积分</span>
                   <span
-                    className="font-mono text-sm font-bold"
+                    className="mt-1 font-mono text-sm font-bold"
                     style={{ color: score > 0 ? '#168447' : score < 0 ? '#C3443C' : '#59665E' }}
                   >
                     {formatScore(scoreValue)}
