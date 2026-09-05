@@ -44,18 +44,17 @@ const SeatSection = ({
       <div
         className="grid w-full max-w-[430px] mx-auto gap-1.5"
         style={{
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(88px, 1.08fr) minmax(0, 1fr)',
-          gridTemplateRows: 'repeat(3, 92px)',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(76px, 0.82fr) minmax(0, 1fr)',
+          gridTemplateRows: 'repeat(3, 82px)',
         }}
       >
         <div
-          className="mx-auto flex h-[86px] w-[86px] flex-col items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white shadow-inner"
+          className="mx-auto flex h-[74px] w-[74px] items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white shadow-inner"
           style={{ gridArea: '2 / 2', alignSelf: 'center' }}
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-bold text-emerald-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-lg font-bold text-emerald-700">
             雀
           </div>
-          <span className="mt-2 text-[11px] text-emerald-50">坐下模式</span>
         </div>
 
         {SEAT_LAYOUT.map(({ seatIndex, name, gridArea }) => {
