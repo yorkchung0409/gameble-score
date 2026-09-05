@@ -1,6 +1,7 @@
 import type { MahjongSeat } from '@shared/api.interface';
 import { Button } from '@client/src/components/ui/button';
 import { ArrowRightLeft, LogOut, Plus } from 'lucide-react';
+import TeaFeeIcon from './TeaFeeIcon';
 
 interface SeatSectionProps {
   seats: MahjongSeat[];
@@ -45,17 +46,22 @@ const SeatSection = ({
         className="grid w-full max-w-[430px] mx-auto gap-1.5"
         style={{
           gridTemplateColumns: 'minmax(0, 1fr) minmax(76px, 0.82fr) minmax(0, 1fr)',
-          gridTemplateRows: 'repeat(3, 82px)',
+          gridTemplateRows: 'repeat(3, minmax(82px, auto))',
         }}
       >
-        <div
-          className="mx-auto flex h-[74px] w-[74px] items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white shadow-inner"
+        <button
+          type="button"
+          className="mx-auto flex h-[74px] w-[74px] items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white shadow-inner transition-transform hover:scale-[1.03]"
           style={{ gridArea: '2 / 2', alignSelf: 'center' }}
+          onClick={() => onQuickTransfer('tea_fee')}
+          disabled={!currentUserId}
+          aria-label="支付茶水费"
+          title="支付茶水费"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-lg font-bold text-emerald-700">
-            雀
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
+            <TeaFeeIcon size={21} color="#B08D1E" />
           </div>
-        </div>
+        </button>
 
         {SEAT_LAYOUT.map(({ seatIndex, name, gridArea }) => {
           const seat = seatMap.get(seatIndex);
@@ -77,7 +83,7 @@ const SeatSection = ({
               <span className="text-sm font-bold text-emerald-700">{name}</span>
               {seat ? (
                 <>
-                  <span className="mt-0.5 w-full truncate text-xs font-semibold text-[#222B26]" title={seat.userName}>
+                  <span className="mt-0.5 w-full break-words text-xs font-semibold leading-tight text-[#222B26]" title={seat.userName}>
                     {seat.userName}{isMe ? '（我）' : ''}
                   </span>
                   <span
