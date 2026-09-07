@@ -45,7 +45,9 @@ export class ProfileController {
     const userId = await this.resolveUserId(cloudOpenId);
     const [poker, mahjong] = await Promise.all([
       this.profileService.getPokerLedgers(userId, 1, 0),
-      this.profileService.getMahjongRooms(userId, 1, 0, true),
+      // “最近房间” is a re-entry shortcut, not an active-membership list.
+      // Leaving a room must not make its most recent record disappear.
+      this.profileService.getMahjongRooms(userId, 1, 0),
     ]);
     return { poker, mahjong };
   }
