@@ -161,6 +161,24 @@ export class MahjongRealtimeService implements OnModuleInit, OnModuleDestroy {
     return this.roomVersions.get(roomCode.trim().toUpperCase()) || 0;
   }
 
+  /**
+   * This process-local gauge is useful for operations diagnostics. It is not
+   * presented as a global online-user count because Cloud Hosting can scale to
+   * more than one instance.
+   */
+  getLocalConnectionStats(): {
+    localConnections: number;
+    localRooms: number;
+    localLongPollWaiters: number;
+  } {
+    return {
+      localConnections: this.socketRooms.size,
+      localRooms: this.roomSockets.size,
+      localLongPollWaiters: Array.from(this.updateWaiters.values())
+        .reduce((total, waiters) => total + waiters.size, 0),
+    };
+  }
+
   waitForUpdate(roomCode: string, since: number, timeoutMs = LONG_POLL_TIMEOUT_MS): Promise<RoomUpdate> {
     const normalizedRoomCode = roomCode.trim().toUpperCase();
     const currentVersion = this.getRoomVersion(normalizedRoomCode);

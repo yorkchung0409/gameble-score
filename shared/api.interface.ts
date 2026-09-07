@@ -150,6 +150,8 @@ export interface PersonalMahjongRoomRecord {
 
 export interface MiniProfileDashboardResponse {
   summary: PersonalSummaryResponse;
+  /** Whether the current WeChat identity is allowed to open the operations page. */
+  canAccessOperations: boolean;
   poker: {
     ledgers: PersonalPokerLedgerRecord[];
     total: number;
@@ -164,7 +166,31 @@ export interface MiniProfileDashboardResponse {
   };
 }
 
-export type MiniRecentActivityResponse = Omit<MiniProfileDashboardResponse, 'summary'>;
+export type MiniRecentActivityResponse = Omit<MiniProfileDashboardResponse, 'summary' | 'canAccessOperations'>;
+
+/** Aggregated operational data. This intentionally contains no user identity or room details. */
+export interface MiniOperationsOverviewResponse {
+  generatedAt: string;
+  users: {
+    total: number;
+    newIn24Hours: number;
+    activeIn5Minutes: number;
+  };
+  rooms: {
+    activeMahjongIn30Minutes: number;
+    activePokerIn30Minutes: number;
+  };
+  transactions: {
+    inLastHour: number;
+    inLast24Hours: number;
+    reversalsInLast24Hours: number;
+  };
+  realtime: {
+    localConnections: number;
+    localRooms: number;
+    localLongPollWaiters: number;
+  };
+}
 
 export interface MahjongOpponentRecord {
   userId: string;

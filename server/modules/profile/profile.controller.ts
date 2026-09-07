@@ -5,12 +5,14 @@ import type {
   MiniRecentActivityResponse,
 } from '@shared/api.interface';
 import { ProfileService } from './profile.service';
+import { OperationsService } from '@server/modules/operations/operations.service';
 
 @Controller('api/mini/me')
 export class ProfileController {
   constructor(
     private readonly profileService: ProfileService,
     private readonly mahjongService: MahjongService,
+    private readonly operationsService: OperationsService,
   ) {}
 
   @Get('dashboard')
@@ -28,7 +30,12 @@ export class ProfileController {
       this.profileService.getPokerLedgers(userId, historyLimit, 0),
       this.profileService.getMahjongRooms(userId, historyLimit, 0),
     ]);
-    return { summary, poker, mahjong };
+    return {
+      summary,
+      poker,
+      mahjong,
+      canAccessOperations: this.operationsService.isAdminOpenId(cloudOpenId),
+    };
   }
 
   @Get('recent')
