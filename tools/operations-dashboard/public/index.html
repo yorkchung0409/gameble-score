@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>打牌记分房 - 本地运营监控</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div><h1>运营监控</h1><p id="updatedAt">正在读取本地数据库...</p></div>
+        <div class="controls"><label class="auto-refresh"><input id="autoRefresh" type="checkbox" /> 自动刷新（60 秒）</label><button id="refreshButton" type="button">刷新数据</button></div>
+      </header>
+      <p id="errorMessage" class="error" hidden></p>
+
+      <section aria-labelledby="usersHeading"><h2 id="usersHeading">用户</h2><div class="metrics three"><article><strong id="userTotal">-</strong><span>累计用户</span></article><article><strong id="userNew24">-</strong><span>24 小时新增</span></article><article><strong id="userActive5">-</strong><span>5 分钟操作</span></article></div></section>
+      <section aria-labelledby="roomsHeading"><h2 id="roomsHeading">房间活跃度</h2><div class="metrics four"><article class="mahjong"><strong id="mahjongTotal">-</strong><span>麻将房总数</span></article><article class="mahjong"><strong id="mahjongActive">-</strong><span>30 分钟活跃麻将房</span></article><article class="poker"><strong id="pokerTotal">-</strong><span>扑克账本总数</span></article><article class="poker"><strong id="pokerActive">-</strong><span>30 分钟活跃扑克账本</span></article></div></section>
+      <section aria-labelledby="transactionHeading"><h2 id="transactionHeading">流水</h2><div class="metrics five"><article><strong id="txHour">-</strong><span>近 1 小时转账</span></article><article><strong id="txDay">-</strong><span>近 24 小时转账</span></article><article><strong id="reversalDay">-</strong><span>24 小时冲正</span></article><article><strong id="teaFeeCount">-</strong><span>24 小时茶水费笔数</span></article><article><strong id="teaFeeAmount">-</strong><span>24 小时茶水费</span></article></div></section>
+      <section class="lists"><article><div class="section-title"><h2>最近麻将房</h2><span>按最后转账或创建时间</span></div><div id="recentRooms" class="data-list"></div></article><article><div class="section-title"><h2>待归档检查</h2><span>45 分钟未操作且尚未归档</span></div><div id="overdueRooms" class="data-list"></div></article></section>
+    </main>
+    <script src="/dashboard.js"></script>
+  </body>
+</html>
