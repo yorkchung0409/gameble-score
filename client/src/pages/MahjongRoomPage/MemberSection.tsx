@@ -106,7 +106,7 @@ const MemberSection = ({
       >
         成员
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-2">
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
       {members.map((m) => {
         const isMe = m.userId === currentUserId;
         const bal = balances.find((b) => b.userId === m.userId);
@@ -149,7 +149,7 @@ const MemberSection = ({
           <AvatarButton label="向茶水费转账" onClick={() => onQuickTransfer('tea_fee')}>
             <span
               className="h-11 w-11 rounded-full flex items-center justify-center shrink-0"
-              style={{ backgroundColor: '#B08D1E', color: '#ffffff' }}
+              style={{ backgroundColor: '#F7F0D9', border: '1px solid #D9C98E', color: '#ffffff' }}
               aria-hidden="true"
             >
               <TeaFeeIcon size={22} />

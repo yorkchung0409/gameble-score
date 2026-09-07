@@ -37,6 +37,13 @@ export function getMySqlConfig(): PoolOptions {
     password,
     database,
     charset: 'utf8mb4',
-    timezone: 'Z',
+    // Keep the driver setting aligned with cloud-datetime.ts and the session
+    // time zone initialized by DatabaseModule.
+    timezone: process.env.DB_TIMEZONE?.trim() || '+08:00',
+    connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || '5000'),
+    waitForConnections: true,
+    // Bound the wait queue so an overloaded cold instance fails fast instead
+    // of retaining an unlimited number of requests in memory.
+    queueLimit: Number(process.env.DB_QUEUE_LIMIT || '100'),
   };
 }

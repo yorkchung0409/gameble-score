@@ -51,16 +51,24 @@ const SeatSection = ({
       >
         <button
           type="button"
-          className="mx-auto flex h-[74px] w-[74px] items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white shadow-inner transition-transform hover:scale-[1.03]"
-          style={{ gridArea: '2 / 2', alignSelf: 'center' }}
+          className="relative z-0 mx-auto flex flex-col items-center justify-center rounded-lg border shadow-inner transition-transform hover:scale-[1.01]"
+          style={{
+            gridArea: '2 / 2',
+            alignSelf: 'center',
+            width: 'calc(100% + 12px)',
+            height: 'calc(100% + 12px)',
+            borderColor: '#B7D0C2',
+            backgroundColor: '#E8F1EC',
+          }}
           onClick={() => onQuickTransfer('tea_fee')}
           disabled={!currentUserId}
           aria-label="支付茶水费"
           title="支付茶水费"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
-            <TeaFeeIcon size={21} color="#B08D1E" />
+          <div className="flex h-12 w-12 items-center justify-center">
+            <TeaFeeIcon size={32} color="#B08D1E" />
           </div>
+          <span className="mt-1 text-[10px] font-semibold text-[#2D6A57]">茶水费</span>
         </button>
 
         {SEAT_LAYOUT.map(({ seatIndex, name, gridArea }) => {
@@ -72,7 +80,7 @@ const SeatSection = ({
           return (
             <div
               key={seatIndex}
-              className="flex min-w-0 flex-col items-center justify-center rounded-lg border bg-white px-1.5 py-2 text-center shadow-sm"
+              className="relative z-10 flex min-w-0 flex-col items-center justify-center rounded-lg border bg-white px-1.5 py-2 text-center shadow-sm"
               style={{
                 gridArea,
                 borderColor: isMe ? '#1E7A46' : '#E1E6E1',

@@ -5,6 +5,7 @@ import {
   Patch,
   Put,
   Delete,
+  Query,
   Body,
   Param,
   HttpCode,
@@ -39,8 +40,18 @@ export class PokerController {
   @Get('rooms/:roomCode')
   async getRoomDetail(
     @Param('roomCode') roomCode: string,
+    @Query('gameLimit') gameLimit?: string,
+    @Query('gameOffset') gameOffset?: string,
   ): Promise<RoomDetailResponse> {
-    return this.pokerService.getPublicRoomDetail(roomCode);
+    const parsedLimit = Number(gameLimit);
+    const parsedOffset = Number(gameOffset);
+    const page = gameLimit === undefined
+      ? undefined
+      : {
+          limit: Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 20,
+          offset: Number.isInteger(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0,
+        };
+    return this.pokerService.getPublicRoomDetail(roomCode, page);
   }
 
   @Patch('rooms/:roomCode')

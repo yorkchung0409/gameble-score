@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { sql } from 'drizzle-orm';
 import {
   date,
   decimal,
@@ -7,10 +8,11 @@ import {
   index,
   mysqlTable,
   smallint,
-  timestamp,
+  tinyint,
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/mysql-core';
+import { cloudDateTime } from './cloud-datetime';
 
 const id = () =>
   varchar('id', { length: 36 })
@@ -24,8 +26,8 @@ export const rooms = mysqlTable(
     roomCode: varchar('room_code', { length: 50 }).notNull().unique(),
     roomName: varchar('room_name', { length: 200 }).notNull().default('牌局记账'),
     gameType: varchar('game_type', { length: 20 }).notNull().default('texas'),
-    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { fsp: 3 }).notNull().defaultNow().onUpdateNow(),
+    createdAt: cloudDateTime('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+    updatedAt: cloudDateTime('updated_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [uniqueIndex('rooms_room_code_key').on(table.roomCode)],
 );
@@ -36,7 +38,7 @@ export const players = mysqlTable(
     id: id(),
     roomId: varchar('room_id', { length: 36 }).notNull(),
     name: varchar('name', { length: 100 }).notNull(),
-    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
+    createdAt: cloudDateTime('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [
     index('idx_players_room_id').on(table.roomId),
@@ -49,11 +51,14 @@ export const games = mysqlTable(
   {
     id: id(),
     roomId: varchar('room_id', { length: 36 }).notNull(),
+    operationId: varchar('operation_id', { length: 80 }),
     gameDate: date('game_date', { mode: 'string' }).notNull(),
-    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
+    createdAt: cloudDateTime('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [
+    uniqueIndex('games_operation_id_key').on(table.operationId),
     index('idx_games_room_id').on(table.roomId),
+    index('idx_games_created_at_id').on(table.createdAt, table.id),
     foreignKey({ columns: [table.roomId], foreignColumns: [rooms.id], name: 'games_room_id_fkey' }).onDelete('cascade'),
   ],
 );
@@ -67,7 +72,7 @@ export const gamePlayers = mysqlTable(
     buyIn: decimal('buy_in', { precision: 14, scale: 2 }).notNull().default('0'),
     balance: decimal('balance', { precision: 14, scale: 2 }).notNull().default('0'),
     netProfit: decimal('net_profit', { precision: 14, scale: 2 }).notNull().default('0'),
-    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
+    createdAt: cloudDateTime('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [
     uniqueIndex('game_players_game_id_player_id_key').on(table.gameId, table.playerId),
@@ -84,7 +89,7 @@ export const users = mysqlTable(
     id: id(),
     name: varchar('name', { length: 100 }).notNull(),
     deviceId: varchar('device_id', { length: 100 }).notNull().unique(),
-    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
+    createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [uniqueIndex('users_device_id_key').on(table.deviceId)],
 );
@@ -96,7 +101,7 @@ export const userIdentities = mysqlTable(
     userId: varchar('user_id', { length: 36 }).notNull(),
     provider: varchar('provider', { length: 30 }).notNull(),
     providerSubject: varchar('provider_subject', { length: 128 }).notNull(),
-    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
+    createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [
     uniqueIndex('user_identities_provider_subject_key').on(table.provider, table.providerSubject),
@@ -106,7 +111,7 @@ export const userIdentities = mysqlTable(
 );
 
 /**
- * 小程序德州账本是创建者私有的手工账本。参与者只存在于账本内，
+ * 小程序扑克账本是创建者私有的手工账本。参与者只存在于账本内，
  * 不与微信身份绑定；selfPlayerId 仅标记账本所有者在名单中对应谁。
  */
 export const pokerLedgerOwners = mysqlTable(
@@ -115,7 +120,7 @@ export const pokerLedgerOwners = mysqlTable(
     roomId: varchar('room_id', { length: 36 }).primaryKey(),
     userId: varchar('user_id', { length: 36 }).notNull(),
     selfPlayerId: varchar('self_player_id', { length: 36 }),
-    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
+    createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [
     index('idx_poker_ledger_owners_user_id').on(table.userId),
@@ -133,8 +138,8 @@ export const pokerLedgerSnapshots = mysqlTable(
     userId: varchar('user_id', { length: 36 }).notNull(),
     netProfit: decimal('net_profit', { precision: 14, scale: 2 }).notNull().default('0'),
     gameCount: int('game_count').notNull().default(0),
-    archivedThrough: timestamp('archived_through', { fsp: 6 }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { fsp: 6 }).notNull().defaultNow().onUpdateNow(),
+    archivedThrough: cloudDateTime('archived_through', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: cloudDateTime('updated_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [
     index('idx_poker_ledger_snapshots_user_id').on(table.userId),
@@ -152,8 +157,8 @@ export const mahjongUserSnapshots = mysqlTable(
     winTotal: decimal('win_total', { precision: 14, scale: 2 }).notNull().default('0'),
     lossTotal: decimal('loss_total', { precision: 14, scale: 2 }).notNull().default('0'),
     teaFeeTotal: decimal('tea_fee_total', { precision: 14, scale: 2 }).notNull().default('0'),
-    archivedThrough: timestamp('archived_through', { fsp: 6 }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { fsp: 6 }).notNull().defaultNow().onUpdateNow(),
+    archivedThrough: cloudDateTime('archived_through', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: cloudDateTime('updated_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [
     foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'mahjong_user_snapshots_user_id_fkey' }).onDelete('cascade'),
@@ -172,8 +177,8 @@ export const mahjongOpponentSnapshots = mysqlTable(
     lossTotal: decimal('loss_total', { precision: 14, scale: 2 }).notNull().default('0'),
     transactionCount: int('transaction_count').notNull().default(0),
     roomCount: int('room_count').notNull().default(0),
-    archivedThrough: timestamp('archived_through', { fsp: 6 }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { fsp: 6 }).notNull().defaultNow().onUpdateNow(),
+    archivedThrough: cloudDateTime('archived_through', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
+    updatedAt: cloudDateTime('updated_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [
     uniqueIndex('mahjong_opponent_snapshots_user_opponent_key').on(table.userId, table.opponentUserId),
@@ -191,10 +196,61 @@ export const mahjongRooms = mysqlTable(
     name: varchar('name', { length: 200 }).notNull().default('麻将房间'),
     mode: varchar('mode', { length: 20 }).notNull().default('seated'),
     creatorUserId: varchar('creator_user_id', { length: 36 }),
-    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
-    dissolvedAt: timestamp('dissolved_at', { fsp: 6 }),
+    createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
+    dissolvedAt: cloudDateTime('dissolved_at', { fsp: 6 }),
   },
-  (table) => [uniqueIndex('mahjong_rooms_room_code_key').on(table.roomCode)],
+  (table) => [
+    uniqueIndex('mahjong_rooms_room_code_key').on(table.roomCode),
+    index('idx_mahjong_rooms_dissolved_created').on(table.dissolvedAt, table.createdAt),
+  ],
+);
+
+/** Current automatic tea-fee rule for a Mahjong room. Historical settings are
+ * copied onto transactions so changing the rule never rewrites old records. */
+export const mahjongTeaFeeRules = mysqlTable(
+  'mahjong_tea_fee_rules',
+  {
+    roomId: varchar('room_id', { length: 36 }).primaryKey(),
+    enabled: tinyint('enabled').notNull().default(0),
+    mode: varchar('mode', { length: 20 }).notNull().default('per_player'),
+    thresholdAmount: decimal('threshold_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+    ratePercent: int('rate_percent').notNull().default(10),
+    version: int('version').notNull().default(1),
+    updatedAt: cloudDateTime('updated_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
+  },
+  (table) => [
+    foreignKey({ columns: [table.roomId], foreignColumns: [mahjongRooms.id], name: 'mahjong_tea_fee_rules_room_fkey' }).onDelete('cascade'),
+  ],
+);
+
+/** Shared room revisions allow realtime notifications to cross container instances. */
+export const mahjongRoomRevisions = mysqlTable(
+  'mahjong_room_revisions',
+  {
+    roomCode: varchar('room_code', { length: 50 }).primaryKey(),
+    version: int('version').notNull().default(0),
+    updatedAt: cloudDateTime('updated_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
+  },
+  (table) => [index('idx_mahjong_room_revisions_updated').on(table.updatedAt)],
+);
+
+/** Tracks which rooms have already contributed to an archived opponent room count. */
+export const mahjongOpponentSnapshotRooms = mysqlTable(
+  'mahjong_opponent_snapshot_rooms',
+  {
+    id: varchar('id', { length: 110 }).primaryKey(),
+    userId: varchar('user_id', { length: 36 }).notNull(),
+    opponentUserId: varchar('opponent_user_id', { length: 36 }).notNull(),
+    roomId: varchar('room_id', { length: 36 }).notNull(),
+    createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
+  },
+  (table) => [
+    uniqueIndex('mahjong_opponent_snapshot_rooms_key').on(table.userId, table.opponentUserId, table.roomId),
+    index('idx_mahjong_opponent_snapshot_rooms_pair').on(table.userId, table.opponentUserId),
+    foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'mahjong_opponent_snapshot_rooms_user_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.opponentUserId], foreignColumns: [users.id], name: 'mahjong_opponent_snapshot_rooms_opponent_fkey' }).onDelete('cascade'),
+    foreignKey({ columns: [table.roomId], foreignColumns: [mahjongRooms.id], name: 'mahjong_opponent_snapshot_rooms_room_fkey' }).onDelete('cascade'),
+  ],
 );
 
 export const mahjongRoomMembers = mysqlTable(
@@ -203,11 +259,14 @@ export const mahjongRoomMembers = mysqlTable(
     id: id(),
     roomId: varchar('room_id', { length: 36 }).notNull(),
     userId: varchar('user_id', { length: 36 }).notNull(),
-    joinedAt: timestamp('joined_at', { fsp: 6 }).notNull().defaultNow(),
+    joinedAt: cloudDateTime('joined_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
+    leftAt: cloudDateTime('left_at', { fsp: 6 }),
   },
   (table) => [
     uniqueIndex('mahjong_room_members_room_id_user_id_key').on(table.roomId, table.userId),
     index('idx_mahjong_room_members_room_id').on(table.roomId),
+    index('idx_mahjong_room_members_user_joined').on(table.userId, table.joinedAt),
+    index('idx_mahjong_room_members_user_active').on(table.userId, table.leftAt, table.joinedAt),
     foreignKey({ columns: [table.roomId], foreignColumns: [mahjongRooms.id], name: 'mahjong_room_members_room_id_fkey' }).onDelete('cascade'),
     foreignKey({ columns: [table.userId], foreignColumns: [users.id], name: 'mahjong_room_members_user_id_fkey' }).onDelete('cascade'),
   ],
@@ -220,7 +279,7 @@ export const mahjongSeats = mysqlTable(
     roomId: varchar('room_id', { length: 36 }).notNull(),
     seatIndex: smallint('seat_index').notNull(),
     userId: varchar('user_id', { length: 36 }).notNull(),
-    joinedAt: timestamp('joined_at', { fsp: 6 }).notNull().defaultNow(),
+    joinedAt: cloudDateTime('joined_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [
     uniqueIndex('mahjong_seats_room_id_seat_index_key').on(table.roomId, table.seatIndex),
@@ -236,17 +295,28 @@ export const mahjongTransactions = mysqlTable(
   {
     id: id(),
     roomId: varchar('room_id', { length: 36 }).notNull(),
+    operationId: varchar('operation_id', { length: 80 }),
+    transactionType: varchar('transaction_type', { length: 40 }).notNull().default('manual'),
+    autoFeeRuleVersion: int('auto_fee_rule_version'),
+    autoFeeMode: varchar('auto_fee_mode', { length: 20 }),
+    autoFeeThresholdAmount: decimal('auto_fee_threshold_amount', { precision: 14, scale: 2 }),
+    autoFeeRatePercent: int('auto_fee_rate_percent'),
     payerId: varchar('payer_id', { length: 36 }).notNull(),
     payeeType: varchar('payee_type', { length: 20 }).notNull(),
     payeeId: varchar('payee_id', { length: 36 }),
     amount: decimal('amount', { precision: 14, scale: 2 }).notNull().default('0'),
     remark: varchar('remark', { length: 500 }),
     reversalOf: varchar('reversal_of', { length: 36 }),
-    createdAt: timestamp('created_at', { fsp: 6 }).notNull().defaultNow(),
+    createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [
+    uniqueIndex('mahjong_transactions_operation_id_key').on(table.operationId),
     uniqueIndex('mahjong_transactions_reversal_of_key').on(table.reversalOf),
     index('idx_mahjong_transactions_room_id').on(table.roomId),
+    index('idx_mahjong_transactions_room_created').on(table.roomId, table.createdAt),
+    index('idx_mahjong_transactions_payer_created').on(table.payerId, table.createdAt),
+    index('idx_mahjong_transactions_payee_created').on(table.payeeId, table.createdAt),
+    index('idx_mahjong_transactions_created_id').on(table.createdAt, table.id),
     foreignKey({ columns: [table.roomId], foreignColumns: [mahjongRooms.id], name: 'mahjong_transactions_room_id_fkey' }).onDelete('cascade'),
     foreignKey({ columns: [table.payerId], foreignColumns: [users.id], name: 'mahjong_transactions_payer_id_fkey' }).onDelete('cascade'),
     foreignKey({ columns: [table.payeeId], foreignColumns: [users.id], name: 'mahjong_transactions_payee_id_fkey' }).onDelete('cascade'),
@@ -263,8 +333,8 @@ export const userRoomVisits = mysqlTable(
     gameType: varchar('game_type', { length: 20 }).notNull().default('texas'),
     roomCode: varchar('room_code', { length: 50 }).notNull(),
     roomName: varchar('room_name', { length: 200 }).notNull(),
-    lastVisitedAt: timestamp('last_visited_at', { fsp: 3 }).notNull().defaultNow(),
-    createdAt: timestamp('created_at', { fsp: 3 }).notNull().defaultNow(),
+    lastVisitedAt: cloudDateTime('last_visited_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+    createdAt: cloudDateTime('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   },
   (table) => [
     uniqueIndex('user_room_visits_device_room_game_key').on(table.deviceId, table.roomId, table.gameType),
@@ -276,6 +346,7 @@ export const userRoomVisits = mysqlTable(
 export const gamePlayersTable = gamePlayers;
 export const gamesTable = games;
 export const mahjongRoomsTable = mahjongRooms;
+export const mahjongRoomRevisionsTable = mahjongRoomRevisions;
 export const mahjongRoomMembersTable = mahjongRoomMembers;
 export const mahjongSeatsTable = mahjongSeats;
 export const mahjongTransactionsTable = mahjongTransactions;
@@ -288,3 +359,4 @@ export const userIdentitiesTable = userIdentities;
 export const pokerLedgerSnapshotsTable = pokerLedgerSnapshots;
 export const mahjongUserSnapshotsTable = mahjongUserSnapshots;
 export const mahjongOpponentSnapshotsTable = mahjongOpponentSnapshots;
+export const mahjongOpponentSnapshotRoomsTable = mahjongOpponentSnapshotRooms;

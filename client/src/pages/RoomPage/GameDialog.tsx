@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Trash2, Calendar as CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import dayjs from 'dayjs';
@@ -56,6 +56,8 @@ const GameDialog = ({
   const [gameDate, setGameDate] = useState<Date>(new Date());
   const [rows, setRows] = useState<GamePlayerRow[]>([]);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const submitLockRef = useRef(false);
+  const operationIdRef = useRef('');
 
   useEffect(() => {
     if (open) {
@@ -64,13 +66,14 @@ const GameDialog = ({
         setRows(
           initialGame.players.map((p) => ({
             playerId: p.playerId,
-            buyIn: String(p.buyIn),
-            balance: String(p.balance),
+            buyIn: Number(p.buyIn) !== 0 ? String(p.buyIn) : '',
+            balance: Number(p.balance) !== 0 ? String(p.balance) : '',
           })),
         );
       } else {
         setGameDate(new Date());
         setRows([]);
+        operationIdRef.current = crypto.randomUUID();
       }
     }
   }, [open, initialGame]);
@@ -99,6 +102,7 @@ const GameDialog = ({
   };
 
   const handleSubmit = async () => {
+    if (submitting || submitLockRef.current) return;
     if (rows.length === 0) {
       toast.error('请至少添加一位人员');
       return;
@@ -118,20 +122,24 @@ const GameDialog = ({
         return;
       }
     }
+    submitLockRef.current = true;
     setSubmitting(true);
     try {
       await onSubmit({
         gameDate: dayjs(gameDate).format('YYYY-MM-DD'),
+        operationId: isEdit ? undefined : (operationIdRef.current || crypto.randomUUID()),
         players: rows.map((r) => ({
           playerId: r.playerId,
           buyIn: r.buyIn === '' ? 0 : Number(r.buyIn),
           balance: r.balance === '' ? 0 : Number(r.balance),
         })),
       });
+      operationIdRef.current = '';
       onOpenChange(false);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '保存失败');
     } finally {
+      submitLockRef.current = false;
       setSubmitting(false);
     }
   };
@@ -241,7 +249,7 @@ const GameDialog = ({
                     value={row.buyIn}
                     onChange={(e) => updateRow(index, 'buyIn', e.target.value)}
                     placeholder="0"
-                    className="text-right tabular-nums"
+                    className="text-right tabular-nums placeholder:text-[#A7B0A8]"
                     style={{ color: '#222B26' }}
                   />
                 </div>
@@ -253,7 +261,7 @@ const GameDialog = ({
                       updateRow(index, 'balance', e.target.value)
                     }
                     placeholder="0"
-                    className="text-right tabular-nums"
+                    className="text-right tabular-nums placeholder:text-[#A7B0A8]"
                     style={{ color: '#222B26' }}
                   />
                 </div>

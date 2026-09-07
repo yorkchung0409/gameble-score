@@ -32,42 +32,28 @@ export class RoomVisitsService {
   constructor(@Inject(DRIZZLE_DB) private readonly db: DbType) {}
 
   async recordVisit(dto: RecordRoomVisitRequest): Promise<{ visit: RoomVisitRecord }> {
-    if (!dto.deviceId || dto.deviceId.trim().length === 0) {
+    if (!dto || typeof dto !== 'object') {
+      throw new BadRequestException('访问记录无效');
+    }
+    if (typeof dto.deviceId !== 'string' || dto.deviceId.trim().length === 0) {
       throw new BadRequestException('deviceId 不能为空');
     }
-    if (!dto.roomId || dto.roomId.trim().length === 0) {
+    if (typeof dto.roomId !== 'string' || dto.roomId.trim().length === 0) {
       throw new BadRequestException('roomId 不能为空');
     }
-    if (!dto.gameType || dto.gameType.trim().length === 0) {
+    if (typeof dto.gameType !== 'string' || dto.gameType.trim().length === 0) {
       throw new BadRequestException('gameType 不能为空');
     }
-
-    const existingRows = await this.db
-      .select()
-      .from(userRoomVisits)
-      .where(
-        and(
-          eq(userRoomVisits.deviceId, dto.deviceId),
-          eq(userRoomVisits.roomId, dto.roomId),
-          eq(userRoomVisits.gameType, dto.gameType),
-        ),
-      );
-
-    if (existingRows.length > 0) {
-      await this.db
-        .update(userRoomVisits)
-        .set({
-          lastVisitedAt: new Date(),
-          roomCode: dto.roomCode,
-          roomName: dto.roomName,
-          userId: dto.userId ?? null,
-        })
-        .where(eq(userRoomVisits.id, existingRows[0].id));
-      const [updated] = await this.db
-        .select()
-        .from(userRoomVisits)
-        .where(eq(userRoomVisits.id, existingRows[0].id));
-      return { visit: toRoomVisitRecord(updated) };
+    if (typeof dto.roomCode !== 'string' || typeof dto.roomName !== 'string') {
+      throw new BadRequestException('房间信息无效');
+    }
+    const deviceId = dto.deviceId.trim();
+    const roomId = dto.roomId.trim();
+    const gameType = dto.gameType.trim();
+    const roomCode = dto.roomCode.trim();
+    const roomName = dto.roomName.trim();
+    if (deviceId.length > 100 || roomId.length > 36 || gameType.length > 20 || roomCode.length > 50 || roomName.length > 200) {
+      throw new BadRequestException('房间访问记录字段过长');
     }
 
     const id = randomUUID();
@@ -75,18 +61,32 @@ export class RoomVisitsService {
       .insert(userRoomVisits)
       .values({
         id,
-        deviceId: dto.deviceId,
+        deviceId,
         userId: dto.userId ?? null,
-        roomId: dto.roomId,
-        gameType: dto.gameType,
-        roomCode: dto.roomCode,
-        roomName: dto.roomName,
+        roomId,
+        gameType,
+        roomCode,
+        roomName,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          lastVisitedAt: new Date(),
+          roomCode,
+          roomName,
+          userId: dto.userId ?? null,
+        },
       });
-    const [inserted] = await this.db
+    const [saved] = await this.db
       .select()
       .from(userRoomVisits)
-      .where(eq(userRoomVisits.id, id));
-    return { visit: toRoomVisitRecord(inserted) };
+      .where(
+        and(
+          eq(userRoomVisits.deviceId, deviceId),
+          eq(userRoomVisits.roomId, roomId),
+          eq(userRoomVisits.gameType, gameType),
+        ),
+      );
+    return { visit: toRoomVisitRecord(saved) };
   }
 
   async removeVisit(dto: {
@@ -94,13 +94,13 @@ export class RoomVisitsService {
     gameType: string;
     roomCode: string;
   }): Promise<{ removed: boolean }> {
-    if (!dto.deviceId || dto.deviceId.trim().length === 0) {
+    if (typeof dto.deviceId !== 'string' || dto.deviceId.trim().length === 0) {
       throw new BadRequestException('deviceId 不能为空');
     }
-    if (!dto.gameType || dto.gameType.trim().length === 0) {
+    if (typeof dto.gameType !== 'string' || dto.gameType.trim().length === 0) {
       throw new BadRequestException('gameType 不能为空');
     }
-    if (!dto.roomCode || dto.roomCode.trim().length === 0) {
+    if (typeof dto.roomCode !== 'string' || dto.roomCode.trim().length === 0) {
       throw new BadRequestException('roomCode 不能为空');
     }
     const rows = await this.db

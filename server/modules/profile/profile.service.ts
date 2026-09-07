@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, inArray, or } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import {
   gamePlayers,
@@ -14,6 +14,7 @@ import {
   users,
 } from '@server/database/schema';
 import { fromCents, toCents } from '@server/common/utils';
+import { calculatePerPlayerTeaFeeCents } from '@server/modules/mahjong/tea-fee';
 import type {
   MahjongOpponentHistoryRecord,
   MahjongOpponentRecord,
@@ -30,8 +31,22 @@ type MyTransaction = {
   payeeId: string | null;
   amount: string;
   reversalOf: string | null;
+  transactionType: string;
+  autoFeeMode: string | null;
+  autoFeeThresholdAmount: string | null;
+  autoFeeRatePercent: number | null;
   createdAt: Date;
 };
+
+function automaticTeaFeeCents(transaction: Pick<MyTransaction, 'transactionType' | 'autoFeeMode' | 'autoFeeThresholdAmount' | 'autoFeeRatePercent' | 'amount'>): number {
+  if (transaction.transactionType !== 'manual' || transaction.autoFeeMode !== 'per_player') return 0;
+  if (transaction.autoFeeThresholdAmount === null || transaction.autoFeeRatePercent === null) return 0;
+  return calculatePerPlayerTeaFeeCents(
+    toCents(transaction.amount),
+    toCents(transaction.autoFeeThresholdAmount),
+    Number(transaction.autoFeeRatePercent),
+  );
+}
 
 const DEFAULT_HISTORY_PAGE_SIZE = 20;
 const MAX_HISTORY_PAGE_SIZE = 50;
@@ -59,11 +74,14 @@ export class ProfileService {
   constructor(@Inject(DRIZZLE_DB) private readonly db: DbType) {}
 
   async getSummary(userId: string): Promise<PersonalSummaryResponse> {
-    const user = await this.getUser(userId);
-    const [poker, mahjong, opponents] = await Promise.all([
+    const [user, transactions] = await Promise.all([
+      this.getUser(userId),
+      this.getMyTransactions(userId),
+    ]);
+    const [poker, mahjong, opponentCount] = await Promise.all([
       this.getPokerTotals(userId),
-      this.getMahjongTotals(userId),
-      this.getMahjongOpponents(userId),
+      this.getMahjongTotals(userId, transactions),
+      this.getMahjongOpponentCount(userId, transactions),
     ]);
 
     return {
@@ -80,7 +98,7 @@ export class ProfileService {
         winTotal: fromCents(mahjong.winCents),
         lossTotal: fromCents(mahjong.lossCents),
         roomCount: mahjong.roomCount,
-        opponentCount: opponents.length,
+        opponentCount,
         teaFeeTotal: fromCents(mahjong.teaFeeCents),
       },
     };
@@ -173,21 +191,30 @@ export class ProfileService {
     userId: string,
     limit?: number,
     offset?: number,
+    activeOnly = false,
   ): Promise<{ rooms: PersonalMahjongRoomRecord[]; total: number; hasMore: boolean; nextOffset: number }> {
     const { safeLimit, safeOffset } = normalizePage(limit, offset);
+    const membershipFilter = activeOnly
+      ? and(
+        eq(mahjongRoomMembers.userId, userId),
+        isNull(mahjongRoomMembers.leftAt),
+        isNull(mahjongRooms.dissolvedAt),
+      )
+      : eq(mahjongRoomMembers.userId, userId);
     const [membershipRows, countRows] = await Promise.all([
       this.db
         .select({ room: mahjongRooms })
         .from(mahjongRoomMembers)
         .innerJoin(mahjongRooms, eq(mahjongRoomMembers.roomId, mahjongRooms.id))
-        .where(eq(mahjongRoomMembers.userId, userId))
-        .orderBy(desc(mahjongRooms.createdAt), desc(mahjongRooms.id))
+        .where(membershipFilter)
+        .orderBy(desc(mahjongRoomMembers.joinedAt), desc(mahjongRooms.createdAt), desc(mahjongRooms.id))
         .limit(safeLimit)
         .offset(safeOffset),
       this.db
         .select({ total: count() })
         .from(mahjongRoomMembers)
-        .where(eq(mahjongRoomMembers.userId, userId)),
+        .innerJoin(mahjongRooms, eq(mahjongRoomMembers.roomId, mahjongRooms.id))
+        .where(membershipFilter),
     ]);
     const total = Number(countRows[0]?.total || 0);
     if (membershipRows.length === 0) {
@@ -197,23 +224,40 @@ export class ProfileService {
     const roomIds = membershipRows.map((row) => row.room.id);
     const transactions = await this.db
       .select({
+        id: mahjongTransactions.id,
         roomId: mahjongTransactions.roomId,
         payerId: mahjongTransactions.payerId,
         payeeType: mahjongTransactions.payeeType,
         payeeId: mahjongTransactions.payeeId,
         amount: mahjongTransactions.amount,
+        reversalOf: mahjongTransactions.reversalOf,
+        transactionType: mahjongTransactions.transactionType,
+        autoFeeMode: mahjongTransactions.autoFeeMode,
+        autoFeeThresholdAmount: mahjongTransactions.autoFeeThresholdAmount,
+        autoFeeRatePercent: mahjongTransactions.autoFeeRatePercent,
         createdAt: mahjongTransactions.createdAt,
       })
       .from(mahjongTransactions)
       .where(inArray(mahjongTransactions.roomId, roomIds));
 
     const totals = new Map<string, { netCents: number; lastActivityAt: Date | null }>();
+    const reversedOriginIds = new Set(
+      transactions
+        .map((transaction) => transaction.reversalOf)
+        .filter((transactionId): transactionId is string => Boolean(transactionId)),
+    );
     for (const transaction of transactions) {
+      if (transaction.reversalOf || reversedOriginIds.has(transaction.id)) continue;
       const total = totals.get(transaction.roomId) ?? { netCents: 0, lastActivityAt: null };
       const amountCents = toCents(transaction.amount);
       if (transaction.payeeType === 'user') {
         if (transaction.payerId === userId) total.netCents -= amountCents;
-        if (transaction.payeeId === userId) total.netCents += amountCents;
+        if (transaction.payeeId === userId) {
+          total.netCents += amountCents;
+          total.netCents -= automaticTeaFeeCents(transaction);
+        }
+      } else if (transaction.payeeType === 'tea_fee' && transaction.payerId === userId) {
+        total.netCents -= amountCents;
       }
       if (!total.lastActivityAt || transaction.createdAt > total.lastActivityAt) {
         total.lastActivityAt = transaction.createdAt;
@@ -237,12 +281,17 @@ export class ProfileService {
     return { rooms, total, hasMore: nextOffset < total, nextOffset };
   }
 
-  async getMahjongOpponents(userId: string): Promise<MahjongOpponentRecord[]> {
+  async getMahjongOpponents(
+    userId: string,
+    existingTransactions?: MyTransaction[],
+  ): Promise<MahjongOpponentRecord[]> {
     const snapshotRows = await this.db
       .select()
       .from(mahjongOpponentSnapshots)
       .where(eq(mahjongOpponentSnapshots.userId, userId));
-    const transactions = this.getEffectiveTransactions(await this.getMyTransactions(userId));
+    const transactions = this.getEffectiveTransactions(
+      existingTransactions ?? await this.getMyTransactions(userId),
+    );
     const byOpponent = new Map<
       string,
       {
@@ -316,6 +365,24 @@ export class ProfileService {
         };
       })
       .sort((left, right) => right.lastPlayedAt.localeCompare(left.lastPlayedAt));
+  }
+
+  private async getMahjongOpponentCount(
+    userId: string,
+    transactions: MyTransaction[],
+  ): Promise<number> {
+    const snapshotRows = await this.db
+      .select({ opponentUserId: mahjongOpponentSnapshots.opponentUserId })
+      .from(mahjongOpponentSnapshots)
+      .where(eq(mahjongOpponentSnapshots.userId, userId));
+    const opponentIds = new Set(snapshotRows.map((row) => row.opponentUserId));
+    for (const transaction of this.getEffectiveTransactions(transactions)) {
+      if (transaction.payeeType !== 'user' || !transaction.payeeId) continue;
+      opponentIds.add(
+        transaction.payerId === userId ? transaction.payeeId : transaction.payerId,
+      );
+    }
+    return opponentIds.size;
   }
 
   async getMahjongOpponentHistory(
@@ -392,9 +459,9 @@ export class ProfileService {
     };
   }
 
-  private async getMahjongTotals(userId: string) {
+  private async getMahjongTotals(userId: string, existingTransactions?: MyTransaction[]) {
     const [transactions, roomRows, snapshotRows] = await Promise.all([
-      this.getMyTransactions(userId),
+      existingTransactions ?? this.getMyTransactions(userId),
       this.db
         .select({ roomId: mahjongRoomMembers.roomId })
         .from(mahjongRoomMembers)
@@ -412,6 +479,7 @@ export class ProfileService {
       const amountCents = toCents(transaction.amount);
       if (transaction.payeeType === 'tea_fee' && transaction.payerId === userId) {
         teaFeeCents += amountCents;
+        netCents -= amountCents;
         continue;
       }
       if (transaction.payeeType !== 'user') continue;
@@ -419,6 +487,11 @@ export class ProfileService {
       netCents += delta;
       if (delta > 0) winCents += delta;
       if (delta < 0) lossCents += Math.abs(delta);
+      if (transaction.payeeId === userId) {
+        const feeCents = automaticTeaFeeCents(transaction);
+        netCents -= feeCents;
+        teaFeeCents += feeCents;
+      }
     }
     return {
       netCents,
@@ -439,6 +512,10 @@ export class ProfileService {
         payeeId: mahjongTransactions.payeeId,
         amount: mahjongTransactions.amount,
         reversalOf: mahjongTransactions.reversalOf,
+        transactionType: mahjongTransactions.transactionType,
+        autoFeeMode: mahjongTransactions.autoFeeMode,
+        autoFeeThresholdAmount: mahjongTransactions.autoFeeThresholdAmount,
+        autoFeeRatePercent: mahjongTransactions.autoFeeRatePercent,
         createdAt: mahjongTransactions.createdAt,
       })
       .from(mahjongTransactions)

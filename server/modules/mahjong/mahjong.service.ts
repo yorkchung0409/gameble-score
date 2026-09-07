@@ -13,6 +13,7 @@ import {
 import { randomUUID } from 'crypto';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import { MahjongRealtimeService } from './mahjong-realtime.service';
+import { calculatePerPlayerTeaFeeCents } from './tea-fee';
 import {
   generateRoomCode,
   isUniqueConstraintError,
@@ -27,9 +28,10 @@ import {
   mahjongSeats,
   mahjongTransactions,
   mahjongRoomMembers,
+  mahjongTeaFeeRules,
   userIdentities,
 } from '@server/database/schema';
-import { eq, desc, and, inArray, max, isNull } from 'drizzle-orm';
+import { eq, desc, and, inArray, max, isNull, sql, count } from 'drizzle-orm';
 import type {
   MahjongUser,
   CreateUserResponse,
@@ -40,12 +42,18 @@ import type {
   MahjongRoomMember,
   MahjongTransaction,
   CreateTransactionRequest,
+  MahjongTeaFeeMode,
+  MahjongTeaFeeRule,
+  UpdateMahjongTeaFeeRuleRequest,
   WeChatMiniProgramLoginResponse,
 } from '@shared/api.interface';
 
 // 自动解散：30 分钟无转账解散；后台扫描间隔 15 分钟，打开房间时会即时检查
 const DISSOLVE_SCAN_INTERVAL_MS = 15 * 60 * 1000;
 const DISSOLVE_IDLE_MS = 30 * 60 * 1000;
+const INITIAL_DISSOLVE_SCAN_DELAY_MS = 30 * 1000;
+
+type DetailPage = { limit: number; offset: number };
 
 function toMahjongUser(row: typeof users.$inferSelect): MahjongUser {
   return {
@@ -77,11 +85,38 @@ function toMahjongRoom(
   };
 }
 
+function defaultTeaFeeRule(): MahjongTeaFeeRule {
+  return {
+    enabled: false,
+    mode: 'per_player',
+    thresholdAmount: '0.00',
+    ratePercent: 10,
+    version: 0,
+    updatedAt: null,
+  };
+}
+
+function toMahjongTeaFeeRule(
+  row: typeof mahjongTeaFeeRules.$inferSelect | undefined,
+): MahjongTeaFeeRule {
+  if (!row) return defaultTeaFeeRule();
+  return {
+    enabled: Boolean(row.enabled),
+    mode: row.mode === 'shared_total' ? 'shared_total' : 'per_player',
+    thresholdAmount: row.thresholdAmount,
+    ratePercent: Number(row.ratePercent),
+    version: Number(row.version),
+    updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
+  };
+}
+
 @Injectable()
 export class MahjongService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MahjongService.name);
 
   private dissolveTimer: ReturnType<typeof setInterval> | null = null;
+  private initialDissolveTimer: ReturnType<typeof setTimeout> | null = null;
+  private dissolveScanInProgress = false;
 
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: DbType,
@@ -94,13 +129,21 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         this.logger.error('自动解散扫描失败', JSON.stringify(e));
       });
     }, DISSOLVE_SCAN_INTERVAL_MS);
-    // 启动时立即执行一次，避免首个 15 分钟窗口内堆积过期房间
-    this.cleanupDissolvedRooms().catch((e) => {
-      this.logger.error('初始自动解散扫描失败', JSON.stringify(e));
-    });
+    this.dissolveTimer.unref?.();
+    // 冷启动先对外提供服务，归档扫描稍后异步执行，不阻塞首位用户。
+    this.initialDissolveTimer = setTimeout(() => {
+      this.cleanupDissolvedRooms().catch((e) => {
+        this.logger.error('初始自动解散扫描失败', JSON.stringify(e));
+      });
+    }, INITIAL_DISSOLVE_SCAN_DELAY_MS);
+    this.initialDissolveTimer.unref?.();
   }
 
   onModuleDestroy(): void {
+    if (this.initialDissolveTimer) {
+      clearTimeout(this.initialDissolveTimer);
+      this.initialDissolveTimer = null;
+    }
     if (this.dissolveTimer) {
       clearInterval(this.dissolveTimer);
       this.dissolveTimer = null;
@@ -109,62 +152,66 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
   /** 扫描并归档超过 30 分钟无转账的麻将房（归档：仅标记解散，数据保留） */
   private async cleanupDissolvedRooms(): Promise<void> {
-    const now = Date.now();
-    const activeRooms = await this.db
-      .select({
-        id: mahjongRooms.id,
-        roomCode: mahjongRooms.roomCode,
-        createdAt: mahjongRooms.createdAt,
-      })
-      .from(mahjongRooms)
-      .where(isNull(mahjongRooms.dissolvedAt));
-    if (activeRooms.length === 0) return;
+    // Prevent a slow database scan from overlapping the next timer tick.
+    if (this.dissolveScanInProgress) return;
+    this.dissolveScanInProgress = true;
+    try {
+      const cutoff = new Date(Date.now() - DISSOLVE_IDLE_MS);
+      const staleRooms = await this.db
+        .select({
+          id: mahjongRooms.id,
+          roomCode: mahjongRooms.roomCode,
+        })
+        .from(mahjongRooms)
+        .leftJoin(
+          mahjongTransactions,
+          eq(mahjongTransactions.roomId, mahjongRooms.id),
+        )
+        .where(isNull(mahjongRooms.dissolvedAt))
+        .groupBy(mahjongRooms.id, mahjongRooms.roomCode, mahjongRooms.createdAt)
+        .having(
+          sql`COALESCE(MAX(${mahjongTransactions.createdAt}), ${mahjongRooms.createdAt}) < ${cutoff}`,
+        );
+      if (staleRooms.length === 0) return;
 
-    const roomIds = activeRooms.map((r) => r.id);
-    const txRows = await this.db
-      .select({
-        roomId: mahjongTransactions.roomId,
-        lastTxAt: max(mahjongTransactions.createdAt),
-      })
-      .from(mahjongTransactions)
-      .where(inArray(mahjongTransactions.roomId, roomIds))
-      .groupBy(mahjongTransactions.roomId);
-
-    const lastTxMap = new Map<string, Date>();
-    for (const r of txRows) {
-      if (r.lastTxAt) lastTxMap.set(r.roomId, new Date(r.lastTxAt));
-    }
-
-    const toDissolve: string[] = [];
-    const dissolvedRoomCodes: string[] = [];
-    for (const rm of activeRooms) {
-      const lastTx = lastTxMap.get(rm.id);
-      const lastActivity = lastTx
-        ? lastTx.getTime()
-        : new Date(rm.createdAt).getTime();
-      if (now - lastActivity > DISSOLVE_IDLE_MS) {
-        toDissolve.push(rm.id);
-        dissolvedRoomCodes.push(rm.roomCode);
-      }
-    }
-
-    if (toDissolve.length > 0) {
+      const toDissolve = staleRooms.map((room) => room.id);
+      const dissolvedAt = new Date();
+      // The null check makes this update idempotent across service instances.
       await this.db
         .update(mahjongRooms)
-        .set({ dissolvedAt: new Date() })
-        .where(inArray(mahjongRooms.id, toDissolve));
-      for (const roomCode of dissolvedRoomCodes) {
-        this.realtime.broadcast(roomCode, 'dissolved');
+        .set({ dissolvedAt })
+        .where(
+          and(
+            isNull(mahjongRooms.dissolvedAt),
+            inArray(mahjongRooms.id, toDissolve),
+          ),
+        );
+      // Only the instance that won the conditional update broadcasts the event.
+      const dissolvedRooms = await this.db
+        .select({ roomCode: mahjongRooms.roomCode })
+        .from(mahjongRooms)
+        .where(
+          and(
+            eq(mahjongRooms.dissolvedAt, dissolvedAt),
+            inArray(mahjongRooms.id, toDissolve),
+          ),
+        );
+      for (const room of dissolvedRooms) {
+        this.realtime.broadcast(room.roomCode, 'dissolved');
       }
-      this.logger.log(`自动解散 ${toDissolve.length} 个麻将房间`);
+      if (dissolvedRooms.length > 0) {
+        this.logger.log(`自动解散 ${dissolvedRooms.length} 个麻将房间`);
+      }
+    } finally {
+      this.dissolveScanInProgress = false;
     }
   }
 
   // ---------- 用户相关 ----------
 
   async createUser(name: string, deviceId: string): Promise<CreateUserResponse> {
-    const trimmedName = (name || '').trim();
-    const normalizedDeviceId = (deviceId || '').trim();
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
+    const normalizedDeviceId = typeof deviceId === 'string' ? deviceId.trim() : '';
     if (!trimmedName) {
       throw new BadRequestException('用户名不能为空');
     }
@@ -173,6 +220,9 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
     if (!normalizedDeviceId) {
       throw new BadRequestException('设备ID不能为空');
+    }
+    if (normalizedDeviceId.length > 100) {
+      throw new BadRequestException('设备ID不能超过 100 个字符');
     }
 
     // 先按 deviceId 查，幂等：已存在则返回已有用户
@@ -195,11 +245,19 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const id = randomUUID();
-      await this.db
-        .insert(users)
-        .values({ id, name: trimmedName, deviceId: normalizedDeviceId });
-      const [row] = await this.db.select().from(users).where(eq(users.id, id));
-      await this.addIdentity(row.id, 'web_device', normalizedDeviceId);
+      const row = await this.db.transaction(async (tx) => {
+        await tx
+          .insert(users)
+          .values({ id, name: trimmedName, deviceId: normalizedDeviceId });
+        await tx.insert(userIdentities).values({
+          id: randomUUID(),
+          userId: id,
+          provider: 'web_device',
+          providerSubject: normalizedDeviceId,
+        });
+        const [created] = await tx.select().from(users).where(eq(users.id, id));
+        return created;
+      });
       return { user: toMahjongUser(row) };
     } catch (error) {
       if (isUniqueConstraintError(error)) {
@@ -220,7 +278,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getUserByDevice(deviceId: string): Promise<GetUserByDeviceResponse> {
-    const normalizedDeviceId = (deviceId || '').trim();
+    const normalizedDeviceId = typeof deviceId === 'string' ? deviceId.trim() : '';
     if (!normalizedDeviceId) {
       return { user: null };
     }
@@ -308,19 +366,39 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
   private async findOrCreateWeChatUser(
     openId: string,
   ): Promise<WeChatMiniProgramLoginResponse> {
-    const existing = await this.findUserByIdentity('wechat_mini', openId);
-    if (existing) {
-      return { user: toMahjongUser(existing), isNewUser: false };
-    }
-
-    // 保留 device_id 的非空约束以兼容现有数据库；真实身份以 user_identities 为准。
-    const id = randomUUID();
-    await this.db
-      .insert(users)
-      .values({ id, name: '微信用户', deviceId: `wx:${openId}` });
-    const [user] = await this.db.select().from(users).where(eq(users.id, id));
     try {
-      await this.addIdentity(user.id, 'wechat_mini', openId);
+      return await this.db.transaction(async (tx) => {
+        const identityRows = await tx
+          .select({ user: users })
+          .from(userIdentities)
+          .innerJoin(users, eq(userIdentities.userId, users.id))
+          .where(
+            and(
+              eq(userIdentities.provider, 'wechat_mini'),
+              eq(userIdentities.providerSubject, openId),
+            ),
+          );
+        if (identityRows[0]) {
+          return { user: toMahjongUser(identityRows[0].user), isNewUser: false };
+        }
+
+        // 兼容旧版本可能遗留的“用户已创建但身份关系未创建”数据。
+        const deviceId = `wx:${openId}`;
+        let [user] = await tx.select().from(users).where(eq(users.deviceId, deviceId));
+        const isNewUser = !user;
+        if (!user) {
+          const id = randomUUID();
+          await tx.insert(users).values({ id, name: '微信用户', deviceId });
+          [user] = await tx.select().from(users).where(eq(users.id, id));
+        }
+        await tx.insert(userIdentities).values({
+          id: randomUUID(),
+          userId: user.id,
+          provider: 'wechat_mini',
+          providerSubject: openId,
+        });
+        return { user: toMahjongUser(user), isNewUser };
+      });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         const concurrentUser = await this.findUserByIdentity('wechat_mini', openId);
@@ -330,11 +408,10 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       }
       throw error;
     }
-    return { user: toMahjongUser(user), isNewUser: true };
   }
 
   async updateUserName(userId: string, name: string): Promise<CreateUserResponse> {
-    const normalizedName = (name || '').trim();
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
     if (!normalizedName) {
       throw new BadRequestException('用户名不能为空');
     }
@@ -359,13 +436,36 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     name: string,
     creatorUserId?: string,
   ): Promise<CreateMahjongRoomResponse> {
-    const normalizedName = (name || '').trim();
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
     if (!normalizedName) {
       throw new BadRequestException('房间名称不能为空');
     }
     if (normalizedName.length > 50) {
       throw new BadRequestException('房间名称不能超过 50 个字符');
     }
+    if (creatorUserId) {
+      await this.assertUserExists(creatorUserId);
+    }
+
+    const createWithCode = (code: string) => this.db.transaction(async (tx) => {
+      const id = randomUUID();
+      await tx.insert(mahjongRooms).values({
+        id,
+        roomCode: code,
+        name: normalizedName,
+        mode: 'free',
+        creatorUserId: creatorUserId ?? null,
+      });
+      if (creatorUserId) {
+        await tx.insert(mahjongRoomMembers).values({
+          id: randomUUID(),
+          roomId: id,
+          userId: creatorUserId,
+        });
+      }
+      const [row] = await tx.select().from(mahjongRooms).where(eq(mahjongRooms.id, id));
+      return row;
+    });
 
     const upperCode = normalizeRoomCode(roomCode ?? '');
     if (upperCode) {
@@ -379,53 +479,22 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       if (existing.length > 0) {
         throw new ConflictException('房间码已存在');
       }
-      if (creatorUserId) {
-        await this.assertUserExists(creatorUserId);
+      try {
+        const row = await createWithCode(upperCode);
+        return { room: toMahjongRoom(row) };
+      } catch (error) {
+        if (isUniqueConstraintError(error)) {
+          throw new ConflictException('房间码已存在');
+        }
+        throw error;
       }
-      const id = randomUUID();
-      await this.db
-        .insert(mahjongRooms)
-        .values({
-          id,
-          roomCode: upperCode,
-          name: normalizedName,
-          mode: 'free',
-          creatorUserId: creatorUserId ?? null,
-        });
-      const [row] = await this.db
-        .select()
-        .from(mahjongRooms)
-        .where(eq(mahjongRooms.id, id));
-      if (creatorUserId) {
-        await this.addMember(row.id, creatorUserId);
-      }
-      return { room: toMahjongRoom(row) };
     }
 
     const maxRetries = 10;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const code = generateRoomCode();
       try {
-        if (creatorUserId) {
-          await this.assertUserExists(creatorUserId);
-        }
-        const id = randomUUID();
-        await this.db
-          .insert(mahjongRooms)
-          .values({
-            id,
-            roomCode: code,
-            name: normalizedName,
-            mode: 'free',
-            creatorUserId: creatorUserId ?? null,
-          });
-        const [row] = await this.db
-          .select()
-          .from(mahjongRooms)
-          .where(eq(mahjongRooms.id, id));
-        if (creatorUserId) {
-          await this.addMember(row.id, creatorUserId);
-        }
+        const row = await createWithCode(code);
         return { room: toMahjongRoom(row) };
       } catch (error) {
         if (isUniqueConstraintError(error)) {
@@ -440,7 +509,10 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
   // ---------- 房间详情（核心方法） ----------
 
-  async getRoomDetail(roomCode: string): Promise<MahjongRoomDetailResponse> {
+  async getRoomDetail(
+    roomCode: string,
+    page?: DetailPage,
+  ): Promise<MahjongRoomDetailResponse> {
     const roomRows = await this.db
       .select()
       .from(mahjongRooms)
@@ -449,7 +521,8 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('房间不存在');
     }
     const roomRow = await this.dissolveRoomIfIdle(roomRows[0]);
-    const room = toMahjongRoom(roomRow);
+    const teaFeeRule = await this.getTeaFeeRule(roomRow.id);
+    const room = Object.assign(toMahjongRoom(roomRow), { teaFeeRule });
     const roomId = roomRow.id;
 
     // 座位（按 seat_index 升序）
@@ -481,16 +554,36 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       joinedAt: s.joinedAt.toISOString(),
     }));
 
-    // 交易记录（按创建时间倒序）
-    const txRows = await this.db
+    // 交易记录按页读取；统计只选取必要字段，避免把完整流水全部搬进应用内存。
+    const txQuery = this.db
       .select()
       .from(mahjongTransactions)
       .where(eq(mahjongTransactions.roomId, roomId))
-      .orderBy(desc(mahjongTransactions.createdAt));
+      .orderBy(desc(mahjongTransactions.createdAt), desc(mahjongTransactions.id));
+    const txRows = page
+      ? await txQuery.limit(page.limit).offset(page.offset)
+      : await txQuery;
+    const statsTxRows = page
+      ? await this.db
+          .select({
+            id: mahjongTransactions.id,
+            payerId: mahjongTransactions.payerId,
+            payeeType: mahjongTransactions.payeeType,
+            payeeId: mahjongTransactions.payeeId,
+            amount: mahjongTransactions.amount,
+            reversalOf: mahjongTransactions.reversalOf,
+            transactionType: mahjongTransactions.transactionType,
+            autoFeeMode: mahjongTransactions.autoFeeMode,
+            autoFeeThresholdAmount: mahjongTransactions.autoFeeThresholdAmount,
+            autoFeeRatePercent: mahjongTransactions.autoFeeRatePercent,
+          })
+          .from(mahjongTransactions)
+          .where(eq(mahjongTransactions.roomId, roomId))
+      : txRows;
 
     // 收集所有 payerId 和 payeeId 用于查用户名
     const txUserIds = new Set<string>();
-    for (const tx of txRows) {
+    for (const tx of [...txRows, ...statsTxRows]) {
       txUserIds.add(tx.payerId);
       if (tx.payeeId) txUserIds.add(tx.payeeId);
     }
@@ -520,7 +613,12 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     const memberRows = await this.db
       .select()
       .from(mahjongRoomMembers)
-      .where(eq(mahjongRoomMembers.roomId, roomId))
+      .where(
+        and(
+          eq(mahjongRoomMembers.roomId, roomId),
+          isNull(mahjongRoomMembers.leftAt),
+        ),
+      )
       .orderBy(mahjongRoomMembers.joinedAt);
     const missingMemberUserIds: string[] = [];
     for (const m of memberRows) {
@@ -543,23 +641,42 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       joinedAt: m.joinedAt.toISOString(),
     }));
 
-    const transactions: MahjongTransaction[] = txRows.map((tx) => ({
-      id: tx.id,
-      payerId: tx.payerId,
-      payerName: userNameMap.get(tx.payerId) ?? '',
-      payeeType: tx.payeeType as 'user' | 'tea_fee',
-      payeeId: tx.payeeId ?? null,
-      payeeName: tx.payeeId ? userNameMap.get(tx.payeeId) ?? '' : null,
-      amount: tx.amount,
-      remark: tx.remark ?? null,
-      reversalOf: tx.reversalOf ?? null,
-      createdAt: tx.createdAt.toISOString(),
-    }));
+    const transactions: MahjongTransaction[] = txRows.map((tx) => {
+      const autoFeeAmountCents =
+        tx.payeeType === 'user' &&
+        tx.transactionType === 'manual' &&
+        tx.autoFeeMode === 'per_player' &&
+        tx.autoFeeThresholdAmount !== null &&
+        tx.autoFeeRatePercent !== null
+          ? calculatePerPlayerTeaFeeCents(
+              toCents(tx.amount),
+              toCents(tx.autoFeeThresholdAmount),
+              Number(tx.autoFeeRatePercent),
+            )
+          : 0;
+      return {
+        id: tx.id,
+        payerId: tx.payerId,
+        payerName: userNameMap.get(tx.payerId) ?? '',
+        payeeType: tx.payeeType as 'user' | 'tea_fee',
+        payeeId: tx.payeeId ?? null,
+        payeeName: tx.payeeId ? userNameMap.get(tx.payeeId) ?? '' : null,
+        amount: tx.amount,
+        remark: tx.remark ?? null,
+        reversalOf: tx.reversalOf ?? null,
+        createdAt: tx.createdAt.toISOString(),
+        transactionType: tx.transactionType === 'auto_tea_fee_adjustment'
+          ? 'auto_tea_fee_adjustment'
+          : 'manual',
+        autoFeeRuleVersion: tx.autoFeeRuleVersion ?? null,
+        teaFeeAmount: autoFeeAmountCents > 0 ? fromCents(autoFeeAmountCents) : null,
+      };
+    });
 
     // 计算 stats
     // 收集所有有转账记录的用户（付款方 + 用户类型收款方），无论当前是否入座
     const txUserIdsSet = new Set<string>();
-    for (const tx of txRows) {
+    for (const tx of statsTxRows) {
       txUserIdsSet.add(tx.payerId);
       if (tx.payeeType === 'user' && tx.payeeId) {
         txUserIdsSet.add(tx.payeeId);
@@ -574,16 +691,48 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
     let teaFeeTotalCents = 0;
     let totalTurnoverCents = 0;
+    const reversedOriginIds = new Set(
+      statsTxRows
+        .map((tx) => tx.reversalOf)
+        .filter((transactionId): transactionId is string => Boolean(transactionId)),
+    );
 
-    for (const tx of txRows) {
+    for (const tx of statsTxRows) {
       const amountCents = toCents(tx.amount);
+      // 冲正记录只保留作审计；原记录与冲正记录都不计入有效流水。
+      if (tx.reversalOf || reversedOriginIds.has(tx.id)) continue;
       totalTurnoverCents += Math.abs(amountCents);
 
       if (tx.payeeType === 'tea_fee') {
         teaFeeTotalCents += amountCents;
-      } else if (tx.payeeType === 'user' && tx.payeeId) {
+        if (balanceMap.has(tx.payerId)) {
+          balanceMap.set(tx.payerId, balanceMap.get(tx.payerId)! - amountCents);
+        }
+        continue;
+      }
+
+      if (tx.payeeType === 'user' && tx.payeeId) {
         if (balanceMap.has(tx.payeeId)) {
           balanceMap.set(tx.payeeId, balanceMap.get(tx.payeeId)! + amountCents);
+        }
+
+        // 单人抽水：每笔带有规则快照的玩家结算转账独立计算，费用从收款人应收中扣除。
+        if (
+          tx.transactionType === 'manual' &&
+          tx.payeeId &&
+          tx.autoFeeMode === 'per_player' &&
+          tx.autoFeeThresholdAmount !== null &&
+          tx.autoFeeRatePercent !== null
+        ) {
+          const feeCents = calculatePerPlayerTeaFeeCents(
+            amountCents,
+            toCents(tx.autoFeeThresholdAmount),
+            Number(tx.autoFeeRatePercent),
+          );
+          if (feeCents > 0) {
+            balanceMap.set(tx.payeeId, (balanceMap.get(tx.payeeId) ?? 0) - feeCents);
+            teaFeeTotalCents += feeCents;
+          }
         }
       }
 
@@ -608,11 +757,15 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     );
     const balanceCheck = sumBalances + teaFeeTotalCents === 0 ? 'balanced' : 'unbalanced';
 
+    const transactionPage = page
+      ? await this.getTransactionPage(roomId, page, txRows.length)
+      : undefined;
     return {
       room,
       seats,
       members,
       transactions,
+      ...(transactionPage ? { transactionPage } : {}),
       stats: {
         balances,
         teaFeeTotal: fromCents(teaFeeTotalCents),
@@ -620,6 +773,20 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         balanceCheck,
       },
     };
+  }
+
+  private async getTransactionPage(
+    roomId: string,
+    page: DetailPage,
+    returnedCount: number,
+  ): Promise<{ total: number; hasMore: boolean; nextOffset: number }> {
+    const [row] = await this.db
+      .select({ total: count(mahjongTransactions.id) })
+      .from(mahjongTransactions)
+      .where(eq(mahjongTransactions.roomId, roomId));
+    const total = Number(row?.total ?? 0);
+    const nextOffset = page.offset + returnedCount;
+    return { total, hasMore: nextOffset < total, nextOffset };
   }
 
   /**
@@ -681,8 +848,17 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     if (userRows.length === 0) {
       throw new BadRequestException('用户不存在');
     }
+    await this.assertActiveMember(roomId, userId);
 
-    // 检查座位是否已被占
+    const userSeated = await this.db
+      .select({ id: mahjongSeats.id, seatIndex: mahjongSeats.seatIndex })
+      .from(mahjongSeats)
+      .where(and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, userId)));
+    if (userSeated[0]?.seatIndex === seatIndex) {
+      return this.getRoomDetail(roomCode);
+    }
+
+    // 检查目标座位是否已被占
     const seatTaken = await this.db
       .select({ id: mahjongSeats.id })
       .from(mahjongSeats)
@@ -693,24 +869,22 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('该座位已被占用');
     }
 
-    // 检查用户是否已在其他座位
-    const userSeated = await this.db
-      .select({ id: mahjongSeats.id })
-      .from(mahjongSeats)
-      .where(and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, userId)));
-    if (userSeated.length > 0) {
-      throw new ConflictException('用户已在其他座位就座');
-    }
-
     try {
-      await this.db
-        .insert(mahjongSeats)
-        .values({ id: randomUUID(), roomId, seatIndex, userId });
+      if (userSeated.length > 0) {
+        await this.db
+          .update(mahjongSeats)
+          .set({ seatIndex })
+          .where(eq(mahjongSeats.id, userSeated[0].id));
+      } else {
+        await this.db
+          .insert(mahjongSeats)
+          .values({ id: randomUUID(), roomId, seatIndex, userId });
+      }
     } catch (error) {
       if (isUniqueConstraintError(error)) {
-        throw new ConflictException('该座位已被占用或用户已就座');
+        throw new ConflictException('该座位刚刚被其他玩家占用');
       }
-      this.logger.error('坐下失败', JSON.stringify(error));
+      this.logger.error('入座或换座失败', JSON.stringify(error));
       throw error;
     }
 
@@ -733,6 +907,8 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('房间已解散');
     }
     const roomId = roomRows[0].id;
+
+    await this.assertActiveMember(roomId, userId);
 
     await this.db
       .delete(mahjongSeats)
@@ -771,8 +947,8 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('用户不存在');
     }
 
-    await this.addMember(roomId, userId);
-    this.realtime.broadcast(roomCode, 'joined');
+    const membershipChanged = await this.addMember(roomId, userId);
+    if (membershipChanged) this.realtime.broadcast(roomCode, 'joined');
     return this.getRoomDetail(roomCode);
   }
 
@@ -828,7 +1004,83 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     return this.getRoomDetail(roomCode);
   }
 
-  /** 退出房间：从成员与座位移除，历史转账与余额保留（重新进入自动接上） */
+  private async getTeaFeeRule(roomId: string): Promise<MahjongTeaFeeRule> {
+    const rows = await this.db
+      .select()
+      .from(mahjongTeaFeeRules)
+      .where(eq(mahjongTeaFeeRules.roomId, roomId));
+    return toMahjongTeaFeeRule(rows[0]);
+  }
+
+  /** 房主配置自动茶水费。累计总额模式先保存为预留配置，不参与计算。 */
+  async updateTeaFeeRule(
+    roomCode: string,
+    dto: UpdateMahjongTeaFeeRuleRequest,
+  ): Promise<MahjongRoomDetailResponse> {
+    if (!dto || typeof dto !== 'object') {
+      throw new BadRequestException('茶水费规则无效');
+    }
+    if (typeof dto.enabled !== 'boolean') {
+      throw new BadRequestException('自动茶水费开关无效');
+    }
+    if (dto.mode !== 'per_player' && dto.mode !== 'shared_total') {
+      throw new BadRequestException('茶水费模式无效');
+    }
+    if (dto.enabled && dto.mode === 'shared_total') {
+      throw new BadRequestException('累计抽水模式暂未开放');
+    }
+    const threshold = parseNonNegativeAmount(dto.thresholdAmount, '起抽金额');
+    const ratePercent = Number(dto.ratePercent);
+    if (!Number.isInteger(ratePercent) || ratePercent < 0 || ratePercent > 100) {
+      throw new BadRequestException('抽成比例必须是 0 到 100 的整数');
+    }
+    if (!dto.operatorUserId || typeof dto.operatorUserId !== 'string') {
+      throw new ForbiddenException('缺少操作用户');
+    }
+
+    const roomRows = await this.db
+      .select({
+        id: mahjongRooms.id,
+        creatorUserId: mahjongRooms.creatorUserId,
+        dissolvedAt: mahjongRooms.dissolvedAt,
+      })
+      .from(mahjongRooms)
+      .where(eq(mahjongRooms.roomCode, normalizeRoomCode(roomCode)));
+    if (roomRows.length === 0) throw new NotFoundException('房间不存在');
+    const roomRow = roomRows[0];
+    if (roomRow.dissolvedAt) throw new BadRequestException('房间已解散');
+    if (!roomRow.creatorUserId || roomRow.creatorUserId !== dto.operatorUserId) {
+      throw new ForbiddenException('只有房主可以设置自动茶水费');
+    }
+
+    const existingRows = await this.db
+      .select({ version: mahjongTeaFeeRules.version })
+      .from(mahjongTeaFeeRules)
+      .where(eq(mahjongTeaFeeRules.roomId, roomRow.id));
+    const nextVersion = Number(existingRows[0]?.version || 0) + 1;
+    const values = {
+      roomId: roomRow.id,
+      enabled: dto.enabled ? 1 : 0,
+      mode: dto.mode,
+      thresholdAmount: fromCents(toCents(threshold)),
+      ratePercent,
+      version: nextVersion,
+      updatedAt: new Date(),
+    };
+    if (existingRows.length === 0) {
+      await this.db.insert(mahjongTeaFeeRules).values(values);
+    } else {
+      await this.db
+        .update(mahjongTeaFeeRules)
+        .set(values)
+        .where(eq(mahjongTeaFeeRules.roomId, roomRow.id));
+    }
+
+    this.realtime.broadcast(roomCode, 'tea_fee_rule');
+    return this.getRoomDetail(roomCode);
+  }
+
+  /** 退出房间：离开当前成员列表，但保留历史参与关系与余额。 */
   async leaveRoom(
     roomCode: string,
     userId: string,
@@ -849,7 +1101,8 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       .delete(mahjongSeats)
       .where(and(eq(mahjongSeats.roomId, roomId), eq(mahjongSeats.userId, userId)));
     await this.db
-      .delete(mahjongRoomMembers)
+      .update(mahjongRoomMembers)
+      .set({ leftAt: new Date() })
       .where(
         and(
           eq(mahjongRoomMembers.roomId, roomId),
@@ -862,9 +1115,9 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** 幂等登记房间成员 */
-  private async addMember(roomId: string, userId: string): Promise<void> {
+  private async addMember(roomId: string, userId: string): Promise<boolean> {
     const existing = await this.db
-      .select({ id: mahjongRoomMembers.id })
+      .select({ id: mahjongRoomMembers.id, leftAt: mahjongRoomMembers.leftAt })
       .from(mahjongRoomMembers)
       .where(
         and(
@@ -872,13 +1125,22 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
           eq(mahjongRoomMembers.userId, userId),
         ),
       );
-    if (existing.length > 0) return;
+    if (existing.length > 0) {
+      if (!existing[0].leftAt) return false;
+      await this.db
+        .update(mahjongRoomMembers)
+        .set({ joinedAt: new Date(), leftAt: null })
+        .where(eq(mahjongRoomMembers.id, existing[0].id));
+      return true;
+    }
     try {
       await this.db
         .insert(mahjongRoomMembers)
         .values({ id: randomUUID(), roomId, userId });
+      return true;
     } catch (error) {
       if (!isUniqueConstraintError(error)) throw error;
+      return false;
     }
   }
 
@@ -892,17 +1154,20 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async addIdentity(
-    userId: string,
-    provider: 'web_device' | 'wechat_mini',
-    providerSubject: string,
-  ): Promise<void> {
-    await this.db.insert(userIdentities).values({
-      id: randomUUID(),
-      userId,
-      provider,
-      providerSubject,
-    });
+  private async assertActiveMember(roomId: string, userId: string): Promise<void> {
+    const rows = await this.db
+      .select({ id: mahjongRoomMembers.id })
+      .from(mahjongRoomMembers)
+      .where(
+        and(
+          eq(mahjongRoomMembers.roomId, roomId),
+          eq(mahjongRoomMembers.userId, userId),
+          isNull(mahjongRoomMembers.leftAt),
+        ),
+      );
+    if (rows.length === 0) {
+      throw new BadRequestException('请先加入房间');
+    }
   }
 
   private async findUserByIdentity(
@@ -928,6 +1193,9 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     roomCode: string,
     dto: CreateTransactionRequest,
   ): Promise<MahjongRoomDetailResponse> {
+    if (!dto || typeof dto !== 'object') {
+      throw new BadRequestException('转账信息无效');
+    }
     const amount = parseNonNegativeAmount(dto.amount, '转账金额');
     if (amount <= 0) {
       throw new BadRequestException('转账金额必须大于 0');
@@ -943,6 +1211,13 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
     if (dto.operatorUserId !== dto.payerId) {
       throw new ForbiddenException('只能以自己的身份创建转账');
+    }
+    if (dto.operationId !== undefined && typeof dto.operationId !== 'string') {
+      throw new BadRequestException('操作号格式无效');
+    }
+    const operationId = dto.operationId?.trim() || null;
+    if (operationId && operationId.length > 80) {
+      throw new BadRequestException('操作号不能超过 80 个字符');
     }
 
     const roomRows = await this.db
@@ -961,6 +1236,19 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }
     const roomId = roomRows[0].id;
     const roomMode = roomRows[0].mode === 'free' ? 'free' : 'seated';
+    const teaFeeRule = await this.getTeaFeeRule(roomId);
+    if (operationId) {
+      const existingOperation = await this.db
+        .select({ roomId: mahjongTransactions.roomId, payerId: mahjongTransactions.payerId })
+        .from(mahjongTransactions)
+        .where(eq(mahjongTransactions.operationId, operationId));
+      if (existingOperation.length > 0) {
+        if (existingOperation[0].roomId !== roomId || existingOperation[0].payerId !== dto.payerId) {
+          throw new ConflictException('操作号已被使用');
+        }
+        return this.getRoomDetail(roomCode);
+      }
+    }
 
     const payerSeat =
       (await this.db
@@ -972,6 +1260,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
 
     if (roomMode === 'seated') {
       // 坐下模式：付款方必须在座位上
+      await this.assertActiveMember(roomId, dto.payerId);
       if (!payerSeat) {
         throw new BadRequestException('付款方不在当前房间座位上');
       }
@@ -988,6 +1277,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
             and(
               eq(mahjongRoomMembers.roomId, roomId),
               eq(mahjongRoomMembers.userId, dto.payerId),
+              isNull(mahjongRoomMembers.leftAt),
             ),
           )).length > 0;
       if (!payerMember) {
@@ -1015,6 +1305,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         if (payeeSeat.length === 0) {
           throw new BadRequestException('收款方不在当前房间座位上');
         }
+        await this.assertActiveMember(roomId, dto.payeeId);
       } else {
         // 普通模式：收款方必须是房间成员
         const payeeMember =
@@ -1025,6 +1316,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
               and(
                 eq(mahjongRoomMembers.roomId, roomId),
                 eq(mahjongRoomMembers.userId, dto.payeeId),
+                isNull(mahjongRoomMembers.leftAt),
               ),
             )).length > 0;
         if (!payeeMember) {
@@ -1034,15 +1326,47 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       payeeIdValue = dto.payeeId;
     }
 
-    await this.db.insert(mahjongTransactions).values({
-      id: randomUUID(),
-      roomId,
-      payerId: dto.payerId,
-      payeeType: dto.payeeType,
-      payeeId: payeeIdValue,
-      amount: fromCents(toCents(amount)),
-      remark: dto.remark,
-    });
+    try {
+      await this.db.insert(mahjongTransactions).values({
+        id: randomUUID(),
+        roomId,
+        operationId,
+        transactionType: 'manual',
+        autoFeeRuleVersion:
+          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'per_player'
+            ? teaFeeRule.version
+            : null,
+        autoFeeMode:
+          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'per_player'
+            ? teaFeeRule.mode
+            : null,
+        autoFeeThresholdAmount:
+          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'per_player'
+            ? teaFeeRule.thresholdAmount
+            : null,
+        autoFeeRatePercent:
+          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'per_player'
+            ? teaFeeRule.ratePercent
+            : null,
+        payerId: dto.payerId,
+        payeeType: dto.payeeType,
+        payeeId: payeeIdValue,
+        amount: fromCents(toCents(amount)),
+        remark: dto.remark,
+      });
+    } catch (error) {
+      if (operationId && isUniqueConstraintError(error)) {
+        const existingOperation = await this.db
+          .select({ roomId: mahjongTransactions.roomId, payerId: mahjongTransactions.payerId })
+          .from(mahjongTransactions)
+          .where(eq(mahjongTransactions.operationId, operationId));
+        if (existingOperation[0]?.roomId === roomId && existingOperation[0]?.payerId === dto.payerId) {
+          return this.getRoomDetail(roomCode);
+        }
+        throw new ConflictException('操作号已被使用');
+      }
+      throw error;
+    }
 
     this.realtime.broadcast(roomCode, 'transaction');
     return this.getRoomDetail(roomCode);

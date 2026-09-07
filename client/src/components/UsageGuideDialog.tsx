@@ -69,7 +69,7 @@ const UsageGuideDialog = ({ open, onClose }: UsageGuideDialogProps) => {
             ]}
           />
           <GuideSection
-            title="德州"
+            title="扑克"
             color="#1E7A46"
             items={[
               '账本号 = 独立记账本，不同局、不同人可分账本记录；',

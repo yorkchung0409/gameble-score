@@ -1,10 +1,10 @@
 # 牌局记账应用
 
-一个支持多人云端协作的打牌记账应用，包含德州扑克和麻将两种记账模式。
+一个支持多人云端协作的打牌记账应用，包含扑克和麻将两种记账模式。
 
 ## 功能特性
 
-### 德州扑克
+### 扑克
 - 创建/加入房间（房间码共享）
 - 人员管理（弹窗添加/删除）
 - 牌局记录（一场多人，日期+人员行：买入、结余、净盈亏自动计算）
@@ -12,16 +12,17 @@
 - 支持编辑和删除牌局
 
 ### 麻将
-- 设备绑定身份（一人一设备）
-- 4个座位（东南西北）
+- 微信 OpenID 身份登录与昵称设置
+- 普通模式和四方位坐下模式（东南西北，可自由换空位）
 - 手动转账记账（付款方固定为自己，收款方可选玩家或茶水费）
-- 座位快速转账（点击其他玩家座位上的转账图标）
+- 转账操作号防重与冲正审计
 - 积分看板（实时计算每人积分、茶水费、流水、守恒校验）
-- 转账记录列表（可删除）
+- 30 分钟无转账自动归档
 
 ### 通用
-- 多人实时同步（5秒轮询）
-- 最近进入房间历史
+- 多人实时同步（WebSocket；断线时长轮询；跨实例共享版本信号）
+- 首页最近一项与分页历史
+- 明细保留 6 个月，清理前写入历史总输赢快照
 - 响应式设计，支持移动端
 
 ## 技术栈
@@ -29,7 +30,7 @@
 - **前端**：React 19 + TypeScript + Vite + Tailwind CSS + Radix UI
 - **后端**：NestJS 10 + TypeScript
 - **数据库**：MySQL + Drizzle ORM
-- **数据存储**：本地 localStorage（设备身份）+ MySQL（业务数据）
+- **数据存储**：MySQL（身份、业务明细与历史汇总）
 
 ## 快速开始
 
@@ -97,10 +98,16 @@ npm start
 
 ### 方式三：微信云托管（小程序推荐）
 1. 在微信开发者工具中开通云开发环境，并在云托管中使用本仓库的 `Dockerfile` 部署服务。
-2. 服务名填写 `express-drsy`，容器端口填写 `3000`，访问方式选择仅小程序私有访问，不开启公网访问。
+2. 服务名填写 `gamescore`，容器端口填写 `3000`，访问方式选择仅小程序私有访问，不开启公网访问。
 3. 在同一云开发环境创建或关联 MySQL 实例。云托管会自动提供 `MYSQL_ADDRESS`、`MYSQL_USERNAME`、`MYSQL_PASSWORD`，因此只需在服务环境变量中额外配置 `DB_NAME`（例如 `gameble_score`）。本地或其他平台则配置 `DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME`。
-4. 云托管会注入 `PORT`；应用在启动前会自动执行 `init.sql` 创建表结构。小程序通过 `wx.cloud.callContainer` 调用服务，因此不需要在小程序后台填写合法 request 域名，也不需要配置 `WECHAT_APP_SECRET`。
-5. 部署完成后查看 `/health` 云端调试接口，确认返回 `status: ok`，再在微信开发者工具运行小程序。
+4. 云托管会注入 `PORT`。已有数据库在容器启动时自动执行带版本号的轻量迁移，已是最新结构时只做一次版本检查；不要为了普通升级修改 `DB_INIT_ON_START`。只有第一次部署到完全空的数据库时，才临时设为 `true` 发布一次，成功后改回 `false`。
+5. 部署完成后检查 `/health`（进程存活）和 `/health/ready`（数据库已就绪）。小程序预热使用后者，避免 Node 已启动但数据库尚不可用时提前进入业务页。
+6. 小程序通过 `wx.cloud.callContainer` 调用 `gamescore`，不需要填写合法 request 域名，也不需要配置 `WECHAT_APP_SECRET`。手动上传压缩包时目标目录留空，压缩包根层必须直接包含 `Dockerfile`、`package.json`、`server` 和 `client`。
+
+### 本地交付路径约定
+- 后端源码始终使用 `gameble-score/`。
+- 手动上传云托管时使用工作区 `outputs/` 下带年月日和序列号的部署包；每次交付会明确指定唯一文件名，旧包仅作为历史备份。
+- 小程序始终使用 `gameble-score-miniprogram/` 根目录，不能用后端部署包代替。
 
 云托管服务的环境变量只绑定到服务版本；`DB_PASSWORD` 和 `MYSQL_PASSWORD` 都属于密钥，应仅填写在云托管控制台，绝不能提交到 Git 仓库。
 
@@ -111,7 +118,7 @@ npm start
 
 ## 微信小程序
 
-微信小程序客户端已独立至 [gameble-score-miniprogram](https://github.com/yorkchung0409/gameble-score-miniprogram)。它使用本仓库后端的微信登录与麻将 API。默认通过微信云托管私有链路调用 `express-drsy`，不需要 HTTPS API 域名或 `WECHAT_APP_SECRET`；公网 `wx.login` 回退模式才需要配置 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。
+微信小程序客户端已独立至 [gameble-score-miniprogram](https://github.com/yorkchung0409/gameble-score-miniprogram)。它使用本仓库后端的微信登录与麻将 API。默认通过微信云托管私有链路调用 `gamescore`，不需要 HTTPS API 域名或 `WECHAT_APP_SECRET`；公网 `wx.login` 回退模式才需要配置 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`。
 
 ## 项目结构
 
@@ -126,7 +133,7 @@ npm start
 ├── server/              # 后端代码
 │   ├── database/        # 数据库 schema 和模块
 │   ├── modules/         # 业务模块
-│   │   ├── poker/       # 德州模块
+│   │   ├── poker/       # 扑克模块
 │   │   ├── mahjong/     # 麻将模块
 │   │   ├── room-visits/ # 房间访问历史
 │   │   └── view/        # 视图渲染

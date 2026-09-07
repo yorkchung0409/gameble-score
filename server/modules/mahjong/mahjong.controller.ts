@@ -24,12 +24,46 @@ import type {
   JoinRoomRequest,
   LeaveRoomRequest,
   UpdateRoomModeRequest,
+  UpdateMahjongTeaFeeRuleRequest,
   CreateTransactionRequest,
   ReverseTransactionRequest,
   WeChatMiniProgramLoginRequest,
   WeChatMiniProgramLoginResponse,
   UpdateMahjongUserProfileRequest,
 } from '@shared/api.interface';
+
+function paginateTransactions(
+  detail: MahjongRoomDetailResponse,
+  limitValue?: string,
+  offsetValue?: string,
+): MahjongRoomDetailResponse {
+  if (limitValue === undefined) return detail;
+  const parsedLimit = Number(limitValue);
+  const parsedOffset = Number(offsetValue);
+  const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 30;
+  const offset = Number.isInteger(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
+  const total = detail.transactions.length;
+  const transactions = detail.transactions.slice(offset, offset + limit);
+  const nextOffset = offset + transactions.length;
+  return {
+    ...detail,
+    transactions,
+    transactionPage: { total, hasMore: nextOffset < total, nextOffset },
+  };
+}
+
+function parseTransactionPage(
+  limitValue?: string,
+  offsetValue?: string,
+): { limit: number; offset: number } | undefined {
+  if (limitValue === undefined) return undefined;
+  const parsedLimit = Number(limitValue);
+  const parsedOffset = Number(offsetValue);
+  return {
+    limit: Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 30,
+    offset: Number.isInteger(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0,
+  };
+}
 
 @Controller('api/mahjong')
 export class MahjongController {
@@ -115,13 +149,18 @@ export class MahjongController {
   @Get('rooms/:roomCode')
   async getRoomDetail(
     @Param('roomCode') roomCode: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
   ): Promise<MahjongRoomDetailResponse> {
-    return this.mahjongService.getRoomDetail(roomCode);
+    return this.mahjongService.getRoomDetail(
+      roomCode,
+      parseTransactionPage(transactionLimit, transactionOffset),
+    );
   }
 
   /**
    * Long-poll fallback for clients that cannot keep a WebSocket connection.
-   * The endpoint waits at most 20 seconds, then the client immediately opens
+   * The endpoint waits at most 45 seconds, then the client immediately opens
    * the next request with the returned version.
    */
   @Get('rooms/:roomCode/events')
@@ -143,9 +182,15 @@ export class MahjongController {
     @Param('roomCode') roomCode: string,
     @Body() dto: SitDownRequest,
     @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
   ): Promise<MahjongRoomDetailResponse> {
     const userId = await this.resolveCloudUserId(cloudOpenId, dto.userId);
-    return this.mahjongService.sitDown(roomCode, userId ?? dto.userId, dto.seatIndex);
+    return paginateTransactions(
+      await this.mahjongService.sitDown(roomCode, userId ?? dto.userId, dto.seatIndex),
+      transactionLimit,
+      transactionOffset,
+    );
   }
 
   @Post('rooms/:roomCode/seats/leave')
@@ -153,9 +198,15 @@ export class MahjongController {
     @Param('roomCode') roomCode: string,
     @Body() dto: LeaveSeatRequest,
     @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
   ): Promise<MahjongRoomDetailResponse> {
     const userId = await this.resolveCloudUserId(cloudOpenId, dto.userId);
-    return this.mahjongService.leaveSeat(roomCode, userId ?? dto.userId);
+    return paginateTransactions(
+      await this.mahjongService.leaveSeat(roomCode, userId ?? dto.userId),
+      transactionLimit,
+      transactionOffset,
+    );
   }
 
   // ---------- 成员 / 模式相关 ----------
@@ -165,9 +216,15 @@ export class MahjongController {
     @Param('roomCode') roomCode: string,
     @Body() dto: JoinRoomRequest,
     @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
   ): Promise<MahjongRoomDetailResponse> {
     const userId = await this.resolveCloudUserId(cloudOpenId, dto.userId);
-    return this.mahjongService.joinRoom(roomCode, userId ?? dto.userId);
+    return paginateTransactions(
+      await this.mahjongService.joinRoom(roomCode, userId ?? dto.userId),
+      transactionLimit,
+      transactionOffset,
+    );
   }
 
   @Post('rooms/:roomCode/leave')
@@ -175,9 +232,15 @@ export class MahjongController {
     @Param('roomCode') roomCode: string,
     @Body() dto: LeaveRoomRequest,
     @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
   ): Promise<MahjongRoomDetailResponse> {
     const userId = await this.resolveCloudUserId(cloudOpenId, dto.userId);
-    return this.mahjongService.leaveRoom(roomCode, userId ?? dto.userId);
+    return paginateTransactions(
+      await this.mahjongService.leaveRoom(roomCode, userId ?? dto.userId),
+      transactionLimit,
+      transactionOffset,
+    );
   }
 
   @Post('rooms/:roomCode/mode')
@@ -185,15 +248,43 @@ export class MahjongController {
     @Param('roomCode') roomCode: string,
     @Body() dto: UpdateRoomModeRequest,
     @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
   ): Promise<MahjongRoomDetailResponse> {
     const operatorUserId = await this.resolveCloudUserId(
       cloudOpenId,
       dto.operatorUserId,
     );
-    return this.mahjongService.updateMode(
-      roomCode,
-      dto.mode,
-      operatorUserId ?? dto.operatorUserId,
+    return paginateTransactions(
+      await this.mahjongService.updateMode(
+        roomCode,
+        dto.mode,
+        operatorUserId ?? dto.operatorUserId,
+      ),
+      transactionLimit,
+      transactionOffset,
+    );
+  }
+
+  @Patch('rooms/:roomCode/tea-fee-rule')
+  async updateTeaFeeRule(
+    @Param('roomCode') roomCode: string,
+    @Body() dto: UpdateMahjongTeaFeeRuleRequest,
+    @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
+  ): Promise<MahjongRoomDetailResponse> {
+    const operatorUserId = await this.resolveCloudUserId(
+      cloudOpenId,
+      dto?.operatorUserId,
+    );
+    return paginateTransactions(
+      await this.mahjongService.updateTeaFeeRule(roomCode, {
+        ...dto,
+        operatorUserId: operatorUserId ?? dto.operatorUserId,
+      }),
+      transactionLimit,
+      transactionOffset,
     );
   }
 
@@ -204,17 +295,23 @@ export class MahjongController {
     @Param('roomCode') roomCode: string,
     @Body() dto: CreateTransactionRequest,
     @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
   ): Promise<MahjongRoomDetailResponse> {
     const payerId = await this.resolveCloudUserId(cloudOpenId, dto.payerId);
     const operatorUserId = await this.resolveCloudUserId(
       cloudOpenId,
       dto.operatorUserId,
     );
-    return this.mahjongService.createTransaction(roomCode, {
-      ...dto,
-      payerId: payerId ?? dto.payerId,
-      operatorUserId: operatorUserId ?? dto.operatorUserId,
-    });
+    return paginateTransactions(
+      await this.mahjongService.createTransaction(roomCode, {
+        ...dto,
+        payerId: payerId ?? dto.payerId,
+        operatorUserId: operatorUserId ?? dto.operatorUserId,
+      }),
+      transactionLimit,
+      transactionOffset,
+    );
   }
 
   @Post('rooms/:roomCode/transactions/:transactionId/reverse')
@@ -223,15 +320,21 @@ export class MahjongController {
     @Param('transactionId') transactionId: string,
     @Body() dto: ReverseTransactionRequest,
     @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('transactionLimit') transactionLimit?: string,
+    @Query('transactionOffset') transactionOffset?: string,
   ): Promise<MahjongRoomDetailResponse> {
     const operatorUserId = await this.resolveCloudUserId(
       cloudOpenId,
       dto.operatorUserId,
     );
-    return this.mahjongService.reverseTransaction(
-      roomCode,
-      transactionId,
-      operatorUserId ?? dto.operatorUserId,
+    return paginateTransactions(
+      await this.mahjongService.reverseTransaction(
+        roomCode,
+        transactionId,
+        operatorUserId ?? dto.operatorUserId,
+      ),
+      transactionLimit,
+      transactionOffset,
     );
   }
 }

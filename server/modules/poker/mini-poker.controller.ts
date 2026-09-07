@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UnauthorizedException,
 } from '@nestjs/common';
 import { MahjongService } from '@server/modules/mahjong/mahjong.service';
@@ -22,9 +23,43 @@ import type {
   CreateRoomResponse,
   MiniPokerLedgerDetailResponse,
   Player,
+  UpdateMiniPokerLedgerSettingsRequest,
   UpdateGameRequest,
   UpdateRoomRequest,
 } from '@shared/api.interface';
+
+function paginateGames(
+  detail: MiniPokerLedgerDetailResponse,
+  limitValue?: string,
+  offsetValue?: string,
+): MiniPokerLedgerDetailResponse {
+  if (limitValue === undefined) return detail;
+  const parsedLimit = Number(limitValue);
+  const parsedOffset = Number(offsetValue);
+  const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 20;
+  const offset = Number.isInteger(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
+  const total = detail.games.length;
+  const games = detail.games.slice(offset, offset + limit);
+  const nextOffset = offset + games.length;
+  return {
+    ...detail,
+    games,
+    gamePage: { total, hasMore: nextOffset < total, nextOffset },
+  };
+}
+
+function parseGamePage(
+  limitValue?: string,
+  offsetValue?: string,
+): { limit: number; offset: number } | undefined {
+  if (limitValue === undefined) return undefined;
+  const parsedLimit = Number(limitValue);
+  const parsedOffset = Number(offsetValue);
+  return {
+    limit: Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 20,
+    offset: Number.isInteger(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0,
+  };
+}
 
 @Controller('api/mini/poker')
 export class MiniPokerController {
@@ -46,9 +81,15 @@ export class MiniPokerController {
   async getLedger(
     @Param('roomCode') roomCode: string,
     @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('gameLimit') gameLimit?: string,
+    @Query('gameOffset') gameOffset?: string,
   ): Promise<MiniPokerLedgerDetailResponse> {
     const userId = await this.resolveUserId(cloudOpenId);
-    return this.pokerService.getPrivateRoomDetail(userId, roomCode);
+    return this.pokerService.getPrivateRoomDetail(
+      userId,
+      roomCode,
+      parseGamePage(gameLimit, gameOffset),
+    );
   }
 
   @Patch('ledgers/:roomCode')
@@ -72,6 +113,22 @@ export class MiniPokerController {
   ): Promise<{ selfPlayerId: string | null }> {
     const userId = await this.resolveUserId(cloudOpenId);
     return this.pokerService.updatePrivateSelfPlayer(userId, roomCode, dto.playerId ?? null);
+  }
+
+  @Patch('ledgers/:roomCode/settings')
+  async updateSettings(
+    @Param('roomCode') roomCode: string,
+    @Body() dto: UpdateMiniPokerLedgerSettingsRequest,
+    @Headers('x-wx-openid') cloudOpenId?: string,
+    @Query('gameLimit') gameLimit?: string,
+    @Query('gameOffset') gameOffset?: string,
+  ): Promise<MiniPokerLedgerDetailResponse> {
+    const userId = await this.resolveUserId(cloudOpenId);
+    return paginateGames(
+      await this.pokerService.updatePrivateSettings(userId, roomCode, dto),
+      gameLimit,
+      gameOffset,
+    );
   }
 
   @Post('ledgers/:roomCode/players')

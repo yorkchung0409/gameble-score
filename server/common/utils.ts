@@ -26,8 +26,8 @@ export function extractDatabaseErrorCode(error: unknown): string | number | unde
 }
 
 /** 规范化房间码：转大写并去空格 */
-export function normalizeRoomCode(roomCode: string): string {
-  return (roomCode || '').trim().toUpperCase();
+export function normalizeRoomCode(roomCode: unknown): string {
+  return typeof roomCode === 'string' ? roomCode.trim().toUpperCase() : '';
 }
 
 /** 兼容数据库驱动的唯一约束冲突判定。 */

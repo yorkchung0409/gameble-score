@@ -1,22 +1,30 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type { Server as HttpServer } from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
+import { inArray, sql } from 'drizzle-orm';
+import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
+import { mahjongRoomRevisions } from '@server/database/schema';
 
 const SOCKET_PATH = '/ws/mahjong';
 const HEARTBEAT_INTERVAL_MS = 20 * 1000;
+const LONG_POLL_TIMEOUT_MS = 45 * 1000;
+// WebSocket clients on the same instance are pushed immediately. Cross-instance
+// revision checks only need a low-frequency safety net because long-polling
+// clients already receive a bounded response window.
+const SHARED_VERSION_SYNC_INTERVAL_MS = 5000;
 
 type RoomEvent = {
   type: 'room.updated';
   roomCode: string;
   version: number;
-  reason: 'joined' | 'left' | 'seat' | 'mode' | 'transaction' | 'reversed' | 'dissolved';
+  reason: 'joined' | 'left' | 'seat' | 'mode' | 'tea_fee_rule' | 'transaction' | 'reversed' | 'dissolved' | 'sync';
 };
 
 type RoomUpdate = { version: number };
 type UpdateWaiter = { since: number; resolve: (update: RoomUpdate) => void };
 
 @Injectable()
-export class MahjongRealtimeService implements OnModuleDestroy {
+export class MahjongRealtimeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MahjongRealtimeService.name);
   private readonly roomSockets = new Map<string, Set<WebSocket>>();
   private readonly socketRooms = new Map<WebSocket, string>();
@@ -24,6 +32,17 @@ export class MahjongRealtimeService implements OnModuleDestroy {
   private readonly updateWaiters = new Map<string, Set<UpdateWaiter>>();
   private websocketServer: WebSocketServer | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private sharedVersionTimer: ReturnType<typeof setInterval> | null = null;
+  private syncingSharedVersions = false;
+
+  constructor(@Inject(DRIZZLE_DB) private readonly db: DbType) {}
+
+  onModuleInit(): void {
+    this.sharedVersionTimer = setInterval(() => {
+      void this.syncSharedVersions();
+    }, SHARED_VERSION_SYNC_INTERVAL_MS);
+    this.sharedVersionTimer.unref?.();
+  }
 
   attach(server: HttpServer): void {
     if (this.websocketServer) return;
@@ -55,6 +74,7 @@ export class MahjongRealtimeService implements OnModuleDestroy {
         if (client.readyState === WebSocket.OPEN) client.ping();
       }
     }, HEARTBEAT_INTERVAL_MS);
+    this.heartbeatTimer.unref?.();
   }
 
   broadcast(
@@ -63,6 +83,17 @@ export class MahjongRealtimeService implements OnModuleDestroy {
   ): void {
     const normalizedRoomCode = roomCode.trim().toUpperCase();
     const version = (this.roomVersions.get(normalizedRoomCode) || 0) + 1;
+    this.publishLocalVersion(normalizedRoomCode, version, reason);
+    void this.persistSharedVersion(normalizedRoomCode);
+  }
+
+  private publishLocalVersion(
+    normalizedRoomCode: string,
+    version: number,
+    reason: RoomEvent['reason'],
+  ): void {
+    const currentVersion = this.roomVersions.get(normalizedRoomCode) || 0;
+    if (version <= currentVersion) return;
     this.roomVersions.set(normalizedRoomCode, version);
     const waiters = this.updateWaiters.get(normalizedRoomCode);
     if (waiters) {
@@ -85,11 +116,52 @@ export class MahjongRealtimeService implements OnModuleDestroy {
     }
   }
 
+  private async persistSharedVersion(roomCode: string): Promise<void> {
+    try {
+      await this.db
+        .insert(mahjongRoomRevisions)
+        .values({ roomCode, version: 1 })
+        .onDuplicateKeyUpdate({
+          set: {
+            version: sql`${mahjongRoomRevisions.version} + 1`,
+            updatedAt: new Date(),
+          },
+        });
+      const [row] = await this.db
+        .select({ version: mahjongRoomRevisions.version })
+        .from(mahjongRoomRevisions)
+        .where(sql`${mahjongRoomRevisions.roomCode} = ${roomCode}`);
+      if (row) this.publishLocalVersion(roomCode, Number(row.version), 'sync');
+    } catch (error) {
+      this.logger.warn(`共享实时版本写入失败，将依赖安全同步: ${String(error)}`);
+    }
+  }
+
+  private async syncSharedVersions(): Promise<void> {
+    if (this.syncingSharedVersions) return;
+    const activeRooms = new Set([...this.roomSockets.keys(), ...this.updateWaiters.keys()]);
+    if (activeRooms.size === 0) return;
+    this.syncingSharedVersions = true;
+    try {
+      const rows = await this.db
+        .select({ roomCode: mahjongRoomRevisions.roomCode, version: mahjongRoomRevisions.version })
+        .from(mahjongRoomRevisions)
+        .where(inArray(mahjongRoomRevisions.roomCode, Array.from(activeRooms)));
+      for (const row of rows) {
+        this.publishLocalVersion(row.roomCode, Number(row.version), 'sync');
+      }
+    } catch (error) {
+      this.logger.debug(`共享实时版本同步失败: ${String(error)}`);
+    } finally {
+      this.syncingSharedVersions = false;
+    }
+  }
+
   getRoomVersion(roomCode: string): number {
     return this.roomVersions.get(roomCode.trim().toUpperCase()) || 0;
   }
 
-  waitForUpdate(roomCode: string, since: number, timeoutMs = 20 * 1000): Promise<RoomUpdate> {
+  waitForUpdate(roomCode: string, since: number, timeoutMs = LONG_POLL_TIMEOUT_MS): Promise<RoomUpdate> {
     const normalizedRoomCode = roomCode.trim().toUpperCase();
     const currentVersion = this.getRoomVersion(normalizedRoomCode);
     if (currentVersion > since) return Promise.resolve({ version: currentVersion });
@@ -114,6 +186,10 @@ export class MahjongRealtimeService implements OnModuleDestroy {
   }
 
   onModuleDestroy(): void {
+    if (this.sharedVersionTimer) {
+      clearInterval(this.sharedVersionTimer);
+      this.sharedVersionTimer = null;
+    }
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;

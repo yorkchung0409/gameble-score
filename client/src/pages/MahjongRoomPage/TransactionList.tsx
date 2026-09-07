@@ -109,6 +109,14 @@ const TransactionList = ({
                       : tx.payeeName}
                   </span>
                 </div>
+                {Number(tx.teaFeeAmount || 0) > 0 && (
+                  <div
+                    className="text-xs mt-1"
+                    style={{ color: '#8F631E' }}
+                  >
+                    茶水费 ¥{Number(tx.teaFeeAmount).toFixed(2)}
+                  </div>
+                )}
                 {tx.remark && (
                   <div
                     className="text-xs mt-1"

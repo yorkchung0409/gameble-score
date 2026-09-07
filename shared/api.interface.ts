@@ -43,6 +43,11 @@ export interface RoomDetailResponse {
     latestGameTurnover: string;
   };
   lastUpdated: string;
+  gamePage?: {
+    total: number;
+    hasMore: boolean;
+    nextOffset: number;
+  };
 }
 
 export interface CreateRoomRequest {
@@ -72,6 +77,7 @@ export interface CreateGamePlayerRequest {
 export interface CreateGameRequest {
   gameDate: string;
   players: CreateGamePlayerRequest[];
+  operationId?: string;
 }
 
 export interface UpdateGameRequest {
@@ -95,6 +101,16 @@ export interface PokerLeaderboardEntry {
 export interface MiniPokerLedgerDetailResponse extends RoomDetailResponse {
   selfPlayerId: string | null;
   leaderboard: PokerLeaderboardEntry[];
+  gamePage?: {
+    total: number;
+    hasMore: boolean;
+    nextOffset: number;
+  };
+}
+
+export interface UpdateMiniPokerLedgerSettingsRequest {
+  roomName: string;
+  selfPlayerId: string | null;
 }
 
 export interface PersonalSummaryResponse {
@@ -131,6 +147,24 @@ export interface PersonalMahjongRoomRecord {
   lastActivityAt: string;
   myNetProfit: string;
 }
+
+export interface MiniProfileDashboardResponse {
+  summary: PersonalSummaryResponse;
+  poker: {
+    ledgers: PersonalPokerLedgerRecord[];
+    total: number;
+    hasMore: boolean;
+    nextOffset: number;
+  };
+  mahjong: {
+    rooms: PersonalMahjongRoomRecord[];
+    total: number;
+    hasMore: boolean;
+    nextOffset: number;
+  };
+}
+
+export type MiniRecentActivityResponse = Omit<MiniProfileDashboardResponse, 'summary'>;
 
 export interface MahjongOpponentRecord {
   userId: string;
@@ -204,6 +238,29 @@ export interface MahjongTransaction {
   remark: string | null;
   reversalOf: string | null;
   createdAt: string;
+  transactionType?: 'manual' | 'auto_tea_fee_adjustment';
+  autoFeeRuleVersion?: number | null;
+  /** 单人自动抽水从本笔收款中扣除的茶水费，非自动抽水转账为 null。 */
+  teaFeeAmount?: string | null;
+}
+
+export type MahjongTeaFeeMode = 'shared_total' | 'per_player';
+
+export interface MahjongTeaFeeRule {
+  enabled: boolean;
+  mode: MahjongTeaFeeMode;
+  thresholdAmount: string;
+  ratePercent: number;
+  version: number;
+  updatedAt: string | null;
+}
+
+export interface UpdateMahjongTeaFeeRuleRequest {
+  enabled: boolean;
+  mode: MahjongTeaFeeMode;
+  thresholdAmount: number;
+  ratePercent: number;
+  operatorUserId: string;
 }
 
 export interface MahjongRoomMember {
@@ -221,6 +278,7 @@ export interface MahjongRoomDetailResponse {
     creatorUserId: string | null;
     createdAt: string;
     dissolvedAt: string | null;
+    teaFeeRule?: MahjongTeaFeeRule;
   };
   seats: MahjongSeat[];
   members: MahjongRoomMember[];
@@ -230,6 +288,11 @@ export interface MahjongRoomDetailResponse {
     teaFeeTotal: string;
     totalTurnover: string;
     balanceCheck: string;
+  };
+  transactionPage?: {
+    total: number;
+    hasMore: boolean;
+    nextOffset: number;
   };
 }
 
@@ -277,6 +340,7 @@ export interface CreateTransactionRequest {
   amount: number;
   remark?: string;
   operatorUserId: string;
+  operationId?: string;
 }
 
 export interface ReverseTransactionRequest {

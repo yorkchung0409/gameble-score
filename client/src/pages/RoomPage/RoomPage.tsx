@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Pencil, Users, Plus, Check, X, ArrowLeft, Copy } from 'lucide-react';
@@ -16,7 +16,7 @@ import type {
   CreateGameRequest,
 } from '@shared/api.interface';
 
-const POLL_INTERVAL = 5000;
+const POLL_INTERVAL = 60_000;
 
 const RoomPage = () => {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -36,15 +36,19 @@ const RoomPage = () => {
   const [gameDialogOpen, setGameDialogOpen] = useState<boolean>(false);
   const [playerDialogOpen, setPlayerDialogOpen] = useState<boolean>(false);
   const [editingGame, setEditingGame] = useState<Game | undefined>(undefined);
+  const fetchPromiseRef = useRef<Promise<void> | null>(null);
+  const visitRecordedRef = useRef(false);
 
-  const fetchRoom = useCallback(async (showError = true) => {
-    if (!roomCode) return;
-    try {
-      const res = await pokerApi.getRoom(roomCode);
+  const fetchRoom = useCallback((showError = true) => {
+    if (!roomCode) return Promise.resolve();
+    if (fetchPromiseRef.current) return fetchPromiseRef.current;
+    const run = async () => {
+      try {
+        const res = await pokerApi.getRoom(roomCode);
         setData(res);
         setError(null);
 
-        if (deviceId) {
+        if (deviceId && !visitRecordedRef.current) {
           try {
             await roomVisitsApi.recordVisit({
               deviceId,
@@ -53,17 +57,27 @@ const RoomPage = () => {
               roomCode: res.room.roomCode,
               roomName: res.room.roomName,
             });
+            visitRecordedRef.current = true;
           } catch {
             // 记录失败不影响主流程
           }
         }
       } catch (err: unknown) {
-      if (showError) {
-        setError(err instanceof Error ? err.message : '加载房间失败');
+        if (showError) {
+          setError(err instanceof Error ? err.message : '加载房间失败');
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
+    };
+    fetchPromiseRef.current = run().finally(() => {
+      fetchPromiseRef.current = null;
+    });
+    return fetchPromiseRef.current;
+  }, [roomCode, deviceId]);
+
+  useEffect(() => {
+    visitRecordedRef.current = false;
   }, [roomCode, deviceId]);
 
   // Initial fetch + polling
@@ -74,9 +88,16 @@ const RoomPage = () => {
     }
     fetchRoom(true);
     const timer = setInterval(() => {
-      fetchRoom(false);
+      if (document.visibilityState === 'visible') fetchRoom(false);
     }, POLL_INTERVAL);
-    return () => clearInterval(timer);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') fetchRoom(false);
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [roomCode, navigate, fetchRoom]);
 
   const startEditName = () => {
@@ -201,7 +222,7 @@ const RoomPage = () => {
     );
   }
 
-  const gameTypeLabel = data.room.gameType === 'mahjong' ? '麻将' : '德州';
+  const gameTypeLabel = data.room.gameType === 'mahjong' ? '麻将' : '扑克';
 
   return (
     <div

@@ -1,9 +1,13 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { and, asc, eq, gt, inArray, lt, or } from 'drizzle-orm';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
+import { MYSQL_POOL } from '@server/database/drizzle.module';
+import type { Pool } from 'mysql2';
+import type { PoolConnection } from 'mysql2/promise';
 import {
   gamePlayers,
   games,
+  mahjongOpponentSnapshotRooms,
   mahjongOpponentSnapshots,
   mahjongTransactions,
   mahjongUserSnapshots,
@@ -11,9 +15,11 @@ import {
   pokerLedgerSnapshots,
 } from '@server/database/schema';
 import { fromCents, toCents } from '@server/common/utils';
+import { calculatePerPlayerTeaFeeCents } from '@server/modules/mahjong/tea-fee';
 
 const DETAIL_RETENTION_MONTHS = 6;
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const INITIAL_CLEANUP_DELAY_MS = 60 * 1000;
 const BATCH_SIZE = 5000;
 const MAX_BATCHES_PER_RUN = 10;
 
@@ -35,24 +41,38 @@ type OpponentAggregate = UserAggregate & {
 export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DataRetentionService.name);
   private timer?: NodeJS.Timeout;
+  private initialTimer?: NodeJS.Timeout;
   private running = false;
 
-  constructor(@Inject(DRIZZLE_DB) private readonly db: DbType) {}
+  constructor(
+    @Inject(DRIZZLE_DB) private readonly db: DbType,
+    @Inject(MYSQL_POOL) private readonly pool: Pool,
+  ) {}
 
   onModuleInit() {
-    void this.runCleanup();
+    this.initialTimer = setTimeout(() => void this.runCleanup(), INITIAL_CLEANUP_DELAY_MS);
+    this.initialTimer.unref?.();
     this.timer = setInterval(() => void this.runCleanup(), CLEANUP_INTERVAL_MS);
     this.timer.unref?.();
   }
 
   onModuleDestroy() {
+    if (this.initialTimer) clearTimeout(this.initialTimer);
     if (this.timer) clearInterval(this.timer);
   }
 
   private async runCleanup() {
     if (this.running) return;
     this.running = true;
+    let connection: PoolConnection | undefined;
+    let lockAcquired = false;
     try {
+      connection = await this.pool.promise().getConnection();
+      const [lockRows] = await connection.query('SELECT GET_LOCK(?, 0) AS acquired', [
+        'gameble_score_retention_cleanup',
+      ]);
+      lockAcquired = Number((lockRows as Array<{ acquired?: number }>)[0]?.acquired || 0) === 1;
+      if (!lockAcquired) return;
       const cutoff = new Date();
       cutoff.setMonth(cutoff.getMonth() - DETAIL_RETENTION_MONTHS);
       const pokerCount = await this.cleanupPoker(cutoff);
@@ -63,6 +83,10 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error('Historical detail cleanup failed; will retry on the next run.', error);
     } finally {
+      if (connection && lockAcquired) {
+        await connection.query('SELECT RELEASE_LOCK(?)', ['gameble_score_retention_cleanup']).catch(() => null);
+      }
+      connection?.release();
       this.running = false;
     }
   }
@@ -219,6 +243,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
           const amountCents = toCents(row.amount);
           if (row.payeeType === 'tea_fee') {
             const total = userTotals.get(row.payerId) ?? { netCents: 0, winCents: 0, lossCents: 0, teaFeeCents: 0 };
+            total.netCents -= amountCents;
             total.teaFeeCents += amountCents;
             userTotals.set(row.payerId, total);
             continue;
@@ -226,6 +251,19 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
           if (row.payeeType !== 'user' || !row.payeeId) continue;
           this.addUserDelta(userTotals, row.payerId, -amountCents);
           this.addUserDelta(userTotals, row.payeeId, amountCents);
+          if (
+            row.transactionType === 'manual' &&
+            row.autoFeeMode === 'per_player' &&
+            row.autoFeeThresholdAmount !== null &&
+            row.autoFeeRatePercent !== null
+          ) {
+            const feeCents = calculatePerPlayerTeaFeeCents(
+              amountCents,
+              toCents(row.autoFeeThresholdAmount),
+              Number(row.autoFeeRatePercent),
+            );
+            if (feeCents > 0) this.addUserTeaFee(userTotals, row.payeeId, feeCents);
+          }
           this.addOpponentDelta(opponentTotals, row.payerId, row.payeeId, -amountCents, row.roomId);
           this.addOpponentDelta(opponentTotals, row.payeeId, row.payerId, amountCents, row.roomId);
         }
@@ -260,6 +298,29 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
 
         for (const total of opponentTotals.values()) {
           const id = `${total.userId}:${total.opponentUserId}`;
+          const roomIds = Array.from(total.roomIds);
+          const trackedRooms = await tx
+            .select({ roomId: mahjongOpponentSnapshotRooms.roomId })
+            .from(mahjongOpponentSnapshotRooms)
+            .where(
+              and(
+                eq(mahjongOpponentSnapshotRooms.userId, total.userId),
+                eq(mahjongOpponentSnapshotRooms.opponentUserId, total.opponentUserId),
+                inArray(mahjongOpponentSnapshotRooms.roomId, roomIds),
+              ),
+            );
+          const trackedRoomIds = new Set(trackedRooms.map((row) => row.roomId));
+          const newRoomIds = roomIds.filter((roomId) => !trackedRoomIds.has(roomId));
+          if (newRoomIds.length > 0) {
+            await tx.insert(mahjongOpponentSnapshotRooms).values(
+              newRoomIds.map((roomId) => ({
+                id: `${total.userId}:${total.opponentUserId}:${roomId}`,
+                userId: total.userId,
+                opponentUserId: total.opponentUserId,
+                roomId,
+              })),
+            );
+          }
           const existing = await tx
             .select()
             .from(mahjongOpponentSnapshots)
@@ -272,7 +333,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
                 winTotal: fromCents(toCents(existing[0].winTotal) + total.winCents),
                 lossTotal: fromCents(toCents(existing[0].lossTotal) + total.lossCents),
                 transactionCount: Number(existing[0].transactionCount || 0) + total.transactionCount,
-                roomCount: Number(existing[0].roomCount || 0) + total.roomIds.size,
+                roomCount: Number(existing[0].roomCount || 0) + newRoomIds.length,
                 archivedThrough: cutoff,
               })
               .where(eq(mahjongOpponentSnapshots.id, id));
@@ -285,7 +346,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
               winTotal: fromCents(total.winCents),
               lossTotal: fromCents(total.lossCents),
               transactionCount: total.transactionCount,
-              roomCount: total.roomIds.size,
+              roomCount: newRoomIds.length,
               archivedThrough: cutoff,
             });
           }
@@ -305,6 +366,13 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
     total.netCents += deltaCents;
     if (deltaCents > 0) total.winCents += deltaCents;
     if (deltaCents < 0) total.lossCents += Math.abs(deltaCents);
+    totals.set(userId, total);
+  }
+
+  private addUserTeaFee(totals: Map<string, UserAggregate>, userId: string, feeCents: number) {
+    const total = totals.get(userId) ?? { netCents: 0, winCents: 0, lossCents: 0, teaFeeCents: 0 };
+    total.netCents -= feeCents;
+    total.teaFeeCents += feeCents;
     totals.set(userId, total);
   }
 

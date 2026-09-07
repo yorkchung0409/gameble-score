@@ -5,4 +5,4 @@
 
 @source "../src";
 
-@config "../../tailwind.config.ts";
+@config "../../tailwind.config.mjs";

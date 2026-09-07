@@ -25,7 +25,7 @@ import type {
   CreateTransactionRequest,
 } from '@shared/api.interface';
 
-const POLL_INTERVAL = 5000;
+const SAFETY_SYNC_INTERVAL = 60_000;
 
 const MahjongRoomPage = () => {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -39,18 +39,24 @@ const MahjongRoomPage = () => {
   const [modeDialogOpen, setModeDialogOpen] = useState<boolean>(false);
   const [switchingMode, setSwitchingMode] = useState<boolean>(false);
   const txDialogRef = useRef<TransactionDialogHandle>(null);
+  const fetchPromiseRef = useRef<Promise<void> | null>(null);
+  const joinedRef = useRef(false);
+  const visitRecordedRef = useRef(false);
 
   const fetchRoom = useCallback(
-    async (showError = true) => {
-      if (!roomCode) return;
-      try {
+    (showError = true) => {
+      if (!roomCode) return Promise.resolve();
+      if (fetchPromiseRef.current) return fetchPromiseRef.current;
+      const run = async () => {
+        try {
         let detail: MahjongRoomDetailResponse;
-        if (currentUser) {
+        if (currentUser && !joinedRef.current) {
           // 进入房间自动登记为成员（幂等）
           try {
             detail = await mahjongApi.joinRoom(roomCode, {
               userId: currentUser.id,
             });
+            joinedRef.current = true;
           } catch {
             detail = await mahjongApi.getRoom(roomCode);
           }
@@ -68,7 +74,7 @@ const MahjongRoomPage = () => {
 
         setError(null);
 
-        if (currentUser && deviceId) {
+        if (currentUser && deviceId && !visitRecordedRef.current) {
           try {
             await roomVisitsApi.recordVisit({
               deviceId,
@@ -78,6 +84,7 @@ const MahjongRoomPage = () => {
               roomCode: detail.room.roomCode,
               roomName: detail.room.name,
             });
+            visitRecordedRef.current = true;
           } catch {
             // 记录失败不影响主流程
           }
@@ -90,9 +97,19 @@ const MahjongRoomPage = () => {
       } finally {
         setLoading(false);
       }
+      };
+      fetchPromiseRef.current = run().finally(() => {
+        fetchPromiseRef.current = null;
+      });
+      return fetchPromiseRef.current;
     },
-    [roomCode, currentUser, navigate],
+    [roomCode, currentUser, deviceId, navigate],
   );
+
+  useEffect(() => {
+    joinedRef.current = false;
+    visitRecordedRef.current = false;
+  }, [roomCode, currentUser?.id]);
 
   useEffect(() => {
     if (!roomCode) {
@@ -101,10 +118,40 @@ const MahjongRoomPage = () => {
     }
     fetchRoom(true);
     const timer = setInterval(() => {
-      fetchRoom(false);
-    }, POLL_INTERVAL);
-    return () => clearInterval(timer);
+      if (document.visibilityState === 'visible') fetchRoom(false);
+    }, SAFETY_SYNC_INTERVAL);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') fetchRoom(false);
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [roomCode, navigate, fetchRoom]);
+
+  useEffect(() => {
+    if (!roomCode) return;
+    let stopped = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    const connect = () => {
+      if (stopped) return;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      socket = new WebSocket(`${protocol}//${window.location.host}/ws/mahjong?roomCode=${encodeURIComponent(roomCode)}`);
+      socket.onmessage = () => fetchRoom(false);
+      socket.onclose = () => {
+        if (!stopped) reconnectTimer = setTimeout(connect, 5000);
+      };
+      socket.onerror = () => socket?.close();
+    };
+    connect();
+    return () => {
+      stopped = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      socket?.close();
+    };
+  }, [roomCode, fetchRoom]);
 
   const handleSitDown = async (seatIndex: number) => {
     if (!roomCode || !currentUser) {
@@ -112,12 +159,12 @@ const MahjongRoomPage = () => {
       return;
     }
     try {
-      await mahjongApi.sitDown(roomCode, {
+      const detail = await mahjongApi.sitDown(roomCode, {
         userId: currentUser.id,
         seatIndex,
       });
+      setData(detail);
       toast.success('已就座');
-      fetchRoom(true);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '坐下失败');
     }
@@ -126,11 +173,11 @@ const MahjongRoomPage = () => {
   const handleLeaveSeat = async () => {
     if (!roomCode || !currentUser) return;
     try {
-      await mahjongApi.leaveSeat(roomCode, {
+      const detail = await mahjongApi.leaveSeat(roomCode, {
         userId: currentUser.id,
       });
+      setData(detail);
       toast.success('已离开座位');
-      fetchRoom(true);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '离开失败');
     }
@@ -145,13 +192,13 @@ const MahjongRoomPage = () => {
     }
     setSwitchingMode(true);
     try {
-      await mahjongApi.updateRoomMode(roomCode, {
+      const detail = await mahjongApi.updateRoomMode(roomCode, {
         mode,
         operatorUserId: currentUser.id,
       });
+      setData(detail);
       toast.success(mode === 'free' ? '已切换为普通模式' : '已切换为坐下模式');
       setModeDialogOpen(false);
-      fetchRoom(true);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '切换失败');
     } finally {
@@ -169,11 +216,11 @@ const MahjongRoomPage = () => {
     if (!ok) return;
 
     try {
-      await mahjongApi.reverseTransaction(roomCode, tx.id, {
+      const detail = await mahjongApi.reverseTransaction(roomCode, tx.id, {
         operatorUserId: currentUser.id,
       });
+      setData(detail);
       toast.success('已冲正该笔转账');
-      fetchRoom(true);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '冲正失败');
     }
@@ -213,9 +260,12 @@ const MahjongRoomPage = () => {
     if (!roomCode) return;
     setSubmitting(true);
     try {
-      await mahjongApi.createTransaction(roomCode, payload);
+      const detail = await mahjongApi.createTransaction(roomCode, {
+        ...payload,
+        operationId: payload.operationId || crypto.randomUUID(),
+      });
+      setData(detail);
       toast.success('转账记录已添加');
-      fetchRoom(true);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '提交失败');
     } finally {

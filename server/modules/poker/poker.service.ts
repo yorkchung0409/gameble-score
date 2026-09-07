@@ -24,7 +24,7 @@ import {
   gamePlayers,
   pokerLedgerOwners,
 } from '@server/database/schema';
-import { eq, desc, inArray, and, sql, sum } from 'drizzle-orm';
+import { eq, desc, inArray, and, sql, sum, count } from 'drizzle-orm';
 import type {
   Room,
   Player,
@@ -37,6 +37,7 @@ import type {
   CreateGameResponse,
   MiniPokerLedgerDetailResponse,
   PokerLeaderboardEntry,
+  UpdateMiniPokerLedgerSettingsRequest,
 } from '@shared/api.interface';
 
 function toRoom(row: typeof rooms.$inferSelect): Room {
@@ -58,6 +59,8 @@ function toPlayer(row: typeof players.$inferSelect): Player {
   };
 }
 
+type DetailPage = { limit: number; offset: number };
+
 @Injectable()
 export class PokerService {
   private readonly logger = new Logger(PokerService.name);
@@ -68,14 +71,31 @@ export class PokerService {
     roomCode: string | undefined,
     roomName: string,
     gameType: string = 'texas',
+    ownerUserId?: string,
   ): Promise<CreateRoomResponse> {
-    const normalizedName = (roomName || '').trim();
+    const normalizedName = typeof roomName === 'string' ? roomName.trim() : '';
     if (!normalizedName) {
       throw new BadRequestException('房间名称不能为空');
     }
     if (normalizedName.length > 50) {
       throw new BadRequestException('房间名称不能超过 50 个字符');
     }
+    const normalizedGameType = typeof gameType === 'string' ? gameType.trim().toLowerCase() : '';
+    if (normalizedGameType !== 'texas' && normalizedGameType !== 'mahjong') {
+      throw new BadRequestException('牌局类型无效');
+    }
+
+    const createWithCode = (code: string) => this.db.transaction(async (tx) => {
+      const id = randomUUID();
+      await tx
+        .insert(rooms)
+        .values({ id, roomCode: code, roomName: normalizedName, gameType: normalizedGameType });
+      if (ownerUserId) {
+        await tx.insert(pokerLedgerOwners).values({ roomId: id, userId: ownerUserId });
+      }
+      const [row] = await tx.select().from(rooms).where(eq(rooms.id, id));
+      return row;
+    });
 
     const upperCode = normalizeRoomCode(roomCode ?? '');
     if (upperCode) {
@@ -89,23 +109,20 @@ export class PokerService {
       if (existing.length > 0) {
         throw new ConflictException('房间码已存在');
       }
-      const id = randomUUID();
-      await this.db
-        .insert(rooms)
-        .values({ id, roomCode: upperCode, roomName: normalizedName, gameType });
-      const [row] = await this.db.select().from(rooms).where(eq(rooms.id, id));
-      return { room: toRoom(row) };
+      try {
+        const row = await createWithCode(upperCode);
+        return { room: toRoom(row) };
+      } catch (error) {
+        if (isUniqueConstraintError(error)) throw new ConflictException('房间码已存在');
+        throw error;
+      }
     }
 
     const maxRetries = 10;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const code = generateRoomCode();
       try {
-        const id = randomUUID();
-        await this.db
-          .insert(rooms)
-          .values({ id, roomCode: code, roomName: normalizedName, gameType });
-        const [row] = await this.db.select().from(rooms).where(eq(rooms.id, id));
+        const row = await createWithCode(code);
         return { room: toRoom(row) };
       } catch (error) {
         if (isUniqueConstraintError(error)) {
@@ -118,7 +135,10 @@ export class PokerService {
     throw new ConflictException('生成唯一房间码失败，请重试');
   }
 
-  async getRoomDetail(roomCode: string): Promise<RoomDetailResponse> {
+  async getRoomDetail(
+    roomCode: string,
+    page?: DetailPage,
+  ): Promise<RoomDetailResponse> {
     const roomRows = await this.db
       .select()
       .from(rooms)
@@ -136,11 +156,14 @@ export class PokerService {
       .orderBy(players.name);
     const playerList: Player[] = playerRows.map((p) => toPlayer(p));
 
-    const gameRows = await this.db
+    const gameQuery = this.db
       .select()
       .from(games)
       .where(eq(games.roomId, room.id))
-      .orderBy(desc(games.gameDate), desc(games.createdAt));
+      .orderBy(desc(games.gameDate), desc(games.createdAt), desc(games.id));
+    const gameRows = page
+      ? await gameQuery.limit(page.limit).offset(page.offset)
+      : await gameQuery;
 
     const gameIdList: string[] = gameRows.map((g) => g.id);
 
@@ -195,14 +218,44 @@ export class PokerService {
       };
     });
 
+    let totalGames = gameList.length;
+    if (page) {
+      const [gameCountRow] = await this.db
+        .select({ total: count(games.id) })
+        .from(games)
+        .where(eq(games.roomId, room.id));
+      const [buyInRow] = await this.db
+        .select({ total: sum(gamePlayers.buyIn) })
+        .from(gamePlayers)
+        .innerJoin(games, eq(gamePlayers.gameId, games.id))
+        .where(eq(games.roomId, room.id));
+      totalGames = Number(gameCountRow?.total ?? 0);
+      totalBuyInCents = toCents(buyInRow?.total ?? '0');
+    }
+
     let latestGameBalanceDiffCents = 0;
     let latestGameTurnoverCents = 0;
-    if (gameList.length > 0) {
-      const latestPlayers = gameList[0].players;
+    let latestNetProfits = (gameList[0]?.players ?? []).map((player) => player.netProfit);
+    if (page) {
+      const [latestGame] = await this.db
+        .select({ id: games.id })
+        .from(games)
+        .where(eq(games.roomId, room.id))
+        .orderBy(desc(games.gameDate), desc(games.createdAt), desc(games.id))
+        .limit(1);
+      latestNetProfits = latestGame
+        ? await this.db
+            .select({ netProfit: gamePlayers.netProfit })
+            .from(gamePlayers)
+            .where(eq(gamePlayers.gameId, latestGame.id))
+            .then((rows) => rows.map((row) => row.netProfit))
+        : [];
+    }
+    if (latestNetProfits.length > 0) {
       let netSumCents = 0;
       let winSumCents = 0;
-      for (const p of latestPlayers) {
-        const netProfitCents = toCents(p.netProfit);
+      for (const netProfit of latestNetProfits) {
+        const netProfitCents = toCents(netProfit);
         netSumCents += netProfitCents;
         if (netProfitCents > 0) winSumCents += netProfitCents;
       }
@@ -215,12 +268,21 @@ export class PokerService {
       players: playerList,
       games: gameList,
       stats: {
-        totalGames: gameList.length,
+        totalGames,
         totalBuyIn: fromCents(totalBuyInCents),
         latestGameBalanceDiff: fromCents(latestGameBalanceDiffCents),
         latestGameTurnover: fromCents(latestGameTurnoverCents),
       },
       lastUpdated: room.updatedAt,
+      ...(page
+        ? {
+            gamePage: {
+              total: totalGames,
+              hasMore: page.offset + gameList.length < totalGames,
+              nextOffset: page.offset + gameList.length,
+            },
+          }
+        : {}),
     };
   }
 
@@ -232,13 +294,14 @@ export class PokerService {
   }
 
   async updateRoom(roomCode: string, roomName: string): Promise<{ room: Room }> {
-    const normalizedName = (roomName || '').trim();
+    const normalizedName = typeof roomName === 'string' ? roomName.trim() : '';
     if (!normalizedName) {
       throw new BadRequestException('房间名称不能为空');
     }
     if (normalizedName.length > 50) {
       throw new BadRequestException('房间名称不能超过 50 个字符');
     }
+
     const roomRows = await this.db
       .select({ id: rooms.id })
       .from(rooms)
@@ -258,7 +321,7 @@ export class PokerService {
   }
 
   async addPlayer(roomCode: string, name: string): Promise<Player> {
-    const normalizedName = (name || '').trim();
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
     if (!normalizedName) {
       throw new BadRequestException('人员名称不能为空');
     }
@@ -314,6 +377,9 @@ export class PokerService {
     roomCode: string,
     dto: CreateGameRequest,
   ): Promise<CreateGameResponse> {
+    if (!dto || typeof dto !== 'object') {
+      throw new BadRequestException('牌局信息无效');
+    }
     const roomRows = await this.db
       .select({ id: rooms.id })
       .from(rooms)
@@ -327,6 +393,25 @@ export class PokerService {
     const gameDate = parseCalendarDate(dto.gameDate, '牌局日期');
 
     const roomId = roomRows[0].id;
+    if (dto.operationId !== undefined && typeof dto.operationId !== 'string') {
+      throw new BadRequestException('操作号格式无效');
+    }
+    const operationId = dto.operationId?.trim() || null;
+    if (operationId && operationId.length > 80) {
+      throw new BadRequestException('操作号不能超过 80 个字符');
+    }
+    if (operationId) {
+      const existingOperation = await this.db
+        .select({ id: games.id, roomId: games.roomId })
+        .from(games)
+        .where(eq(games.operationId, operationId));
+      if (existingOperation.length > 0) {
+        if (existingOperation[0].roomId !== roomId) {
+          throw new ConflictException('操作号已被使用');
+        }
+        return this.getGameResponse(roomCode, existingOperation[0].id);
+      }
+    }
 
     // 按玩家去重，防止同一玩家在一局中重复出现导致统计翻倍
     const uniquePlayers = Array.from(
@@ -351,11 +436,13 @@ export class PokerService {
       throw new BadRequestException('存在不属于该房间的玩家');
     }
 
-    const result = await this.db.transaction(async (tx) => {
+    let result: CreateGameResponse;
+    try {
+      result = await this.db.transaction(async (tx) => {
       const gameId = randomUUID();
       await tx
         .insert(games)
-        .values({ id: gameId, roomId, gameDate });
+        .values({ id: gameId, roomId, gameDate, operationId });
 
       const gpRows = uniquePlayers.map((p) => {
         const buyIn = parseNonNegativeAmount(p.buyIn, '买入');
@@ -405,8 +492,21 @@ export class PokerService {
         playerCount: gamePlayerList.length,
       };
 
-      return { game };
-    });
+        return { game };
+      });
+    } catch (error) {
+      if (operationId && isUniqueConstraintError(error)) {
+        const existingOperation = await this.db
+          .select({ id: games.id, roomId: games.roomId })
+          .from(games)
+          .where(eq(games.operationId, operationId));
+        if (existingOperation[0]?.roomId === roomId) {
+          return this.getGameResponse(roomCode, existingOperation[0].id);
+        }
+        throw new ConflictException('操作号已被使用');
+      }
+      throw error;
+    }
 
     await this.touchRoom(roomId);
     return result;
@@ -417,17 +517,22 @@ export class PokerService {
     roomCode: string | undefined,
     roomName: string,
   ): Promise<CreateRoomResponse> {
-    const result = await this.createRoom(roomCode, roomName, 'texas');
-    await this.db.insert(pokerLedgerOwners).values({
-      roomId: result.room.id,
-      userId,
-    });
-    return result;
+    return this.createRoom(roomCode, roomName, 'texas', userId);
   }
 
-  async getPublicRoomDetail(roomCode: string): Promise<RoomDetailResponse> {
+  private async getGameResponse(roomCode: string, gameId: string): Promise<CreateGameResponse> {
+    const detail = await this.getRoomDetail(roomCode);
+    const game = detail.games.find((item) => item.id === gameId);
+    if (!game) throw new NotFoundException('牌局不存在');
+    return { game };
+  }
+
+  async getPublicRoomDetail(
+    roomCode: string,
+    page?: DetailPage,
+  ): Promise<RoomDetailResponse> {
     await this.assertPublicRoom(roomCode);
-    return this.getRoomDetail(roomCode);
+    return this.getRoomDetail(roomCode, page);
   }
 
   async updatePublicRoom(roomCode: string, roomName: string): Promise<{ room: Room }> {
@@ -486,13 +591,14 @@ export class PokerService {
   async getPrivateRoomDetail(
     userId: string,
     roomCode: string,
+    page?: DetailPage,
   ): Promise<MiniPokerLedgerDetailResponse> {
     const owner = await this.getPrivateOwner(userId, roomCode);
-    const detail = await this.getRoomDetail(roomCode);
+    const detail = await this.getRoomDetail(roomCode, page);
     return {
       ...detail,
       selfPlayerId: owner.selfPlayerId ?? null,
-      leaderboard: this.buildLeaderboard(detail),
+      leaderboard: await this.buildLeaderboard(owner.roomId),
     };
   }
 
@@ -565,6 +671,47 @@ export class PokerService {
     return { selfPlayerId };
   }
 
+  async updatePrivateSettings(
+    userId: string,
+    roomCode: string,
+    dto: UpdateMiniPokerLedgerSettingsRequest,
+  ): Promise<MiniPokerLedgerDetailResponse> {
+    const owner = await this.getPrivateOwner(userId, roomCode);
+    const normalizedName = typeof dto?.roomName === 'string' ? dto.roomName.trim() : '';
+    if (!normalizedName) {
+      throw new BadRequestException('账本名称不能为空');
+    }
+    if (normalizedName.length > 50) {
+      throw new BadRequestException('账本名称不能超过 50 个字符');
+    }
+    const selfPlayerId = dto.selfPlayerId ?? null;
+    if (selfPlayerId !== null && typeof selfPlayerId !== 'string') {
+      throw new BadRequestException('本人身份格式无效');
+    }
+
+    await this.db.transaction(async (tx) => {
+      if (selfPlayerId) {
+        const matches = await tx
+          .select({ id: players.id })
+          .from(players)
+          .where(and(eq(players.id, selfPlayerId), eq(players.roomId, owner.roomId)));
+        if (matches.length === 0) {
+          throw new BadRequestException('请选择本账本内的参与者');
+        }
+      }
+      await tx
+        .update(rooms)
+        .set({ roomName: normalizedName, updatedAt: new Date() })
+        .where(eq(rooms.id, owner.roomId));
+      await tx
+        .update(pokerLedgerOwners)
+        .set({ selfPlayerId })
+        .where(eq(pokerLedgerOwners.roomId, owner.roomId));
+    });
+
+    return this.getPrivateRoomDetail(userId, roomCode);
+  }
+
   private async getPrivateOwner(userId: string, roomCode: string) {
     const rows = await this.db
       .select({
@@ -596,37 +743,30 @@ export class PokerService {
     }
   }
 
-  private buildLeaderboard(detail: RoomDetailResponse): PokerLeaderboardEntry[] {
-    const totals = new Map<
-      string,
-      { playerName: string; netCents: number; winCents: number; lossCents: number; gameIds: Set<string> }
-    >();
-    for (const game of detail.games) {
-      for (const gamePlayer of game.players) {
-        const current = totals.get(gamePlayer.playerId) ?? {
-          playerName: gamePlayer.playerName,
-          netCents: 0,
-          winCents: 0,
-          lossCents: 0,
-          gameIds: new Set<string>(),
-        };
-        const netCents = toCents(gamePlayer.netProfit);
-        current.netCents += netCents;
-        if (netCents > 0) current.winCents += netCents;
-        if (netCents < 0) current.lossCents += Math.abs(netCents);
-        current.gameIds.add(game.id);
-        totals.set(gamePlayer.playerId, current);
-      }
-    }
+  private async buildLeaderboard(roomId: string): Promise<PokerLeaderboardEntry[]> {
+    const rows = await this.db
+      .select({
+        playerId: gamePlayers.playerId,
+        playerName: players.name,
+        netProfit: sql<string>`COALESCE(SUM(${gamePlayers.netProfit}), 0)`,
+        winTotal: sql<string>`COALESCE(SUM(CASE WHEN ${gamePlayers.netProfit} > 0 THEN ${gamePlayers.netProfit} ELSE 0 END), 0)`,
+        lossTotal: sql<string>`COALESCE(SUM(CASE WHEN ${gamePlayers.netProfit} < 0 THEN -${gamePlayers.netProfit} ELSE 0 END), 0)`,
+        gameCount: count(gamePlayers.id),
+      })
+      .from(gamePlayers)
+      .innerJoin(players, eq(gamePlayers.playerId, players.id))
+      .innerJoin(games, eq(gamePlayers.gameId, games.id))
+      .where(eq(games.roomId, roomId))
+      .groupBy(gamePlayers.playerId, players.name);
 
-    return Array.from(totals.entries())
-      .map(([playerId, total]) => ({
-        playerId,
-        playerName: total.playerName,
-        netProfit: fromCents(total.netCents),
-        winTotal: fromCents(total.winCents),
-        lossTotal: fromCents(total.lossCents),
-        gameCount: total.gameIds.size,
+    return rows
+      .map((row) => ({
+        playerId: row.playerId,
+        playerName: row.playerName,
+        netProfit: fromCents(toCents(row.netProfit)),
+        winTotal: fromCents(toCents(row.winTotal)),
+        lossTotal: fromCents(toCents(row.lossTotal)),
+        gameCount: Number(row.gameCount || 0),
       }))
       .sort((left, right) => {
         const netDifference = toCents(right.netProfit) - toCents(left.netProfit);

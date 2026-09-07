@@ -1,4 +1,4 @@
-import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useState, useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { toast } from 'sonner';
 import { ArrowRight, ChevronDown } from 'lucide-react';
 import { Button } from '@client/src/components/ui/button';
@@ -77,6 +77,8 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
     const [payeeValue, setPayeeValue] = useState<string>('');
     const [amount, setAmount] = useState('');
     const [remark, setRemark] = useState('');
+    const submitLockRef = useRef(false);
+    const operationIdRef = useRef('');
 
     const canOpen = () => {
       if (blockedMessage) {
@@ -97,6 +99,7 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
         setPayeeValue(preselectedPayeeId ?? getDefaultPayee());
         setAmount('');
         setRemark('');
+        operationIdRef.current = crypto.randomUUID();
         setOpen(true);
       },
     }));
@@ -114,6 +117,7 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
     }, [open, payeeOptions]);
 
     const handleSubmit = async () => {
+      if (submitting || submitLockRef.current) return;
       const amountNum = Number(amount);
       if (!amountNum || amountNum <= 0) {
         toast.error('金额必须大于 0');
@@ -129,6 +133,7 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
         payeeType: isTeaFee ? 'tea_fee' : 'user',
         amount: amountNum,
         operatorUserId: currentUserId,
+        operationId: operationIdRef.current || crypto.randomUUID(),
       };
       if (!isTeaFee) {
         payload.payeeId = payeeValue;
@@ -136,8 +141,14 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
       if (remark.trim()) {
         payload.remark = remark.trim();
       }
-      await onSubmit(payload);
-      setOpen(false);
+      submitLockRef.current = true;
+      try {
+        await onSubmit(payload);
+        operationIdRef.current = '';
+        setOpen(false);
+      } finally {
+        submitLockRef.current = false;
+      }
     };
 
     const isTeaFee = payeeValue === 'tea_fee';
@@ -200,7 +211,7 @@ const TransactionDialog = forwardRef<TransactionDialogHandle, TransactionDialogP
                     {isTeaFee ? (
                       <span
                         className="h-11 w-11 rounded-full flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: '#B08D1E', color: '#ffffff' }}
+                        style={{ backgroundColor: '#F7F0D9', border: '1px solid #D9C98E', color: '#ffffff' }}
                         aria-hidden="true"
                       >
                         <TeaFeeIcon size={22} />

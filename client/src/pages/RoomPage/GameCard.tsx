@@ -142,7 +142,7 @@ const GameCard = ({ game, onEdit, onDelete }: GameCardProps) => {
             </div>
           </div>
 
-          <div className="mt-2">
+          <div className="mt-2 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-[rgba(255_255_255_0.15)] hover:bg-transparent">

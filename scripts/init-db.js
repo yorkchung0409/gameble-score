@@ -36,12 +36,24 @@ function getConfig() {
   return { host, port, user, password, database, charset: 'utf8mb4', multipleStatements: true };
 }
 
+async function ensureCompatibilityColumns(connection) {
+  const [rows] = await connection.query(
+    "SELECT COUNT(*) AS column_count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mahjong_room_members' AND COLUMN_NAME = 'left_at'",
+  );
+  if (Number(rows[0]?.column_count || 0) === 0) {
+    await connection.query(
+      'ALTER TABLE mahjong_room_members ADD COLUMN left_at DATETIME(6) NULL AFTER joined_at',
+    );
+  }
+}
+
 async function main() {
   let connection;
   try {
     connection = await mysql.createConnection(getConfig());
     const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'init.sql'), 'utf8');
     await connection.query(schemaSql);
+    await ensureCompatibilityColumns(connection);
     console.log('MySQL schema initialized successfully');
   } catch (error) {
     console.error('Failed to initialize MySQL schema:', error);
