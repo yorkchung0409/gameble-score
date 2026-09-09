@@ -8,6 +8,7 @@ import {
   index,
   mysqlTable,
   smallint,
+  text,
   tinyint,
   uniqueIndex,
   varchar,
@@ -26,10 +27,14 @@ export const rooms = mysqlTable(
     roomCode: varchar('room_code', { length: 50 }).notNull().unique(),
     roomName: varchar('room_name', { length: 200 }).notNull().default('牌局记账'),
     gameType: varchar('game_type', { length: 20 }).notNull().default('texas'),
+    createOperationId: varchar('create_operation_id', { length: 80 }),
     createdAt: cloudDateTime('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
     updatedAt: cloudDateTime('updated_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
   },
-  (table) => [uniqueIndex('rooms_room_code_key').on(table.roomCode)],
+  (table) => [
+    uniqueIndex('rooms_room_code_key').on(table.roomCode),
+    uniqueIndex('rooms_create_operation_id_key').on(table.createOperationId),
+  ],
 );
 
 export const players = mysqlTable(
@@ -91,7 +96,10 @@ export const users = mysqlTable(
     deviceId: varchar('device_id', { length: 100 }).notNull().unique(),
     createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
-  (table) => [uniqueIndex('users_device_id_key').on(table.deviceId)],
+  (table) => [
+    uniqueIndex('users_device_id_key').on(table.deviceId),
+    uniqueIndex('users_name_key').on(table.name),
+  ],
 );
 
 export const userIdentities = mysqlTable(
@@ -196,11 +204,13 @@ export const mahjongRooms = mysqlTable(
     name: varchar('name', { length: 200 }).notNull().default('麻将房间'),
     mode: varchar('mode', { length: 20 }).notNull().default('seated'),
     creatorUserId: varchar('creator_user_id', { length: 36 }),
+    createOperationId: varchar('create_operation_id', { length: 80 }),
     createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
     dissolvedAt: cloudDateTime('dissolved_at', { fsp: 6 }),
   },
   (table) => [
     uniqueIndex('mahjong_rooms_room_code_key').on(table.roomCode),
+    uniqueIndex('mahjong_rooms_create_operation_id_key').on(table.createOperationId),
     index('idx_mahjong_rooms_dissolved_created').on(table.dissolvedAt, table.createdAt),
   ],
 );
@@ -212,9 +222,10 @@ export const mahjongTeaFeeRules = mysqlTable(
   {
     roomId: varchar('room_id', { length: 36 }).primaryKey(),
     enabled: tinyint('enabled').notNull().default(0),
-    mode: varchar('mode', { length: 20 }).notNull().default('per_player'),
+    mode: varchar('mode', { length: 20 }).notNull().default('percentage'),
     thresholdAmount: decimal('threshold_amount', { precision: 14, scale: 2 }).notNull().default('0'),
     ratePercent: int('rate_percent').notNull().default(10),
+    feeAmount: decimal('fee_amount', { precision: 14, scale: 2 }).notNull().default('0'),
     version: int('version').notNull().default(1),
     updatedAt: cloudDateTime('updated_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
@@ -229,6 +240,10 @@ export const mahjongRoomRevisions = mysqlTable(
   {
     roomCode: varchar('room_code', { length: 50 }).primaryKey(),
     version: int('version').notNull().default(0),
+    statsVersion: int('stats_version').notNull().default(-1),
+    statsTotalTurnover: decimal('stats_total_turnover', { precision: 14, scale: 2 }).notNull().default('0'),
+    statsTeaFeeTotal: decimal('stats_tea_fee_total', { precision: 14, scale: 2 }).notNull().default('0'),
+    statsBalancesJson: text('stats_balances_json'),
     updatedAt: cloudDateTime('updated_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [index('idx_mahjong_room_revisions_updated').on(table.updatedAt)],
@@ -301,6 +316,7 @@ export const mahjongTransactions = mysqlTable(
     autoFeeMode: varchar('auto_fee_mode', { length: 20 }),
     autoFeeThresholdAmount: decimal('auto_fee_threshold_amount', { precision: 14, scale: 2 }),
     autoFeeRatePercent: int('auto_fee_rate_percent'),
+    autoFeeAmount: decimal('auto_fee_amount', { precision: 14, scale: 2 }),
     payerId: varchar('payer_id', { length: 36 }).notNull(),
     payeeType: varchar('payee_type', { length: 20 }).notNull(),
     payeeId: varchar('payee_id', { length: 36 }),

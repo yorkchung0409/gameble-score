@@ -270,13 +270,15 @@ export interface MahjongTransaction {
   teaFeeAmount?: string | null;
 }
 
-export type MahjongTeaFeeMode = 'shared_total' | 'per_player';
+export type MahjongTeaFeeMode = 'percentage' | 'threshold';
 
 export interface MahjongTeaFeeRule {
   enabled: boolean;
   mode: MahjongTeaFeeMode;
   thresholdAmount: string;
   ratePercent: number;
+  /** 满额抽水模式下，每达到一个门槛扣除的固定金额。 */
+  feeAmount: string;
   version: number;
   updatedAt: string | null;
 }
@@ -286,6 +288,7 @@ export interface UpdateMahjongTeaFeeRuleRequest {
   mode: MahjongTeaFeeMode;
   thresholdAmount: number;
   ratePercent: number;
+  feeAmount: number;
   operatorUserId: string;
 }
 

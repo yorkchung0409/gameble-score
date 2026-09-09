@@ -21,6 +21,7 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/scripts ./scripts
+COPY --from=build /app/shared ./shared
 COPY --from=build /app/init.sql ./init.sql
 
 EXPOSE 3000

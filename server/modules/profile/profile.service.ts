@@ -14,7 +14,7 @@ import {
   users,
 } from '@server/database/schema';
 import { fromCents, toCents } from '@server/common/utils';
-import { calculatePerPlayerTeaFeeCents } from '@server/modules/mahjong/tea-fee';
+import { calculatePerPlayerTeaFeeCents, calculateThresholdTeaFeeCents } from '@server/modules/mahjong/tea-fee';
 import type {
   MahjongOpponentHistoryRecord,
   MahjongOpponentRecord,
@@ -35,17 +35,27 @@ type MyTransaction = {
   autoFeeMode: string | null;
   autoFeeThresholdAmount: string | null;
   autoFeeRatePercent: number | null;
+  autoFeeAmount: string | null;
   createdAt: Date;
 };
 
-function automaticTeaFeeCents(transaction: Pick<MyTransaction, 'transactionType' | 'autoFeeMode' | 'autoFeeThresholdAmount' | 'autoFeeRatePercent' | 'amount'>): number {
-  if (transaction.transactionType !== 'manual' || transaction.autoFeeMode !== 'per_player') return 0;
-  if (transaction.autoFeeThresholdAmount === null || transaction.autoFeeRatePercent === null) return 0;
-  return calculatePerPlayerTeaFeeCents(
-    toCents(transaction.amount),
-    toCents(transaction.autoFeeThresholdAmount),
-    Number(transaction.autoFeeRatePercent),
-  );
+function automaticTeaFeeCents(transaction: Pick<MyTransaction, 'transactionType' | 'autoFeeMode' | 'autoFeeThresholdAmount' | 'autoFeeRatePercent' | 'autoFeeAmount' | 'amount'>): number {
+  if (transaction.transactionType !== 'manual' || transaction.autoFeeThresholdAmount === null) return 0;
+  if ((transaction.autoFeeMode === 'percentage' || transaction.autoFeeMode === 'per_player') && transaction.autoFeeRatePercent !== null) {
+    return calculatePerPlayerTeaFeeCents(
+      toCents(transaction.amount),
+      toCents(transaction.autoFeeThresholdAmount),
+      Number(transaction.autoFeeRatePercent),
+    );
+  }
+  if ((transaction.autoFeeMode === 'threshold' || transaction.autoFeeMode === 'shared_total') && transaction.autoFeeAmount !== null) {
+    return calculateThresholdTeaFeeCents(
+      toCents(transaction.amount),
+      toCents(transaction.autoFeeThresholdAmount),
+      toCents(transaction.autoFeeAmount),
+    );
+  }
+  return 0;
 }
 
 const DEFAULT_HISTORY_PAGE_SIZE = 20;
@@ -235,6 +245,7 @@ export class ProfileService {
         autoFeeMode: mahjongTransactions.autoFeeMode,
         autoFeeThresholdAmount: mahjongTransactions.autoFeeThresholdAmount,
         autoFeeRatePercent: mahjongTransactions.autoFeeRatePercent,
+        autoFeeAmount: mahjongTransactions.autoFeeAmount,
         createdAt: mahjongTransactions.createdAt,
       })
       .from(mahjongTransactions)
@@ -516,6 +527,7 @@ export class ProfileService {
         autoFeeMode: mahjongTransactions.autoFeeMode,
         autoFeeThresholdAmount: mahjongTransactions.autoFeeThresholdAmount,
         autoFeeRatePercent: mahjongTransactions.autoFeeRatePercent,
+        autoFeeAmount: mahjongTransactions.autoFeeAmount,
         createdAt: mahjongTransactions.createdAt,
       })
       .from(mahjongTransactions)

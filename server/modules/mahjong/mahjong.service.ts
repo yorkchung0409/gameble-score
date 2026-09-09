@@ -13,7 +13,7 @@ import {
 import { randomUUID } from 'crypto';
 import { DRIZZLE_DB, type DbType } from '@server/database/drizzle.module';
 import { MahjongRealtimeService } from './mahjong-realtime.service';
-import { calculatePerPlayerTeaFeeCents } from './tea-fee';
+import { calculatePerPlayerTeaFeeCents, calculateThresholdTeaFeeCents, calculateRoomStats, canViewRoom, centsToAmount } from './tea-fee';
 import {
   generateRoomCode,
   isUniqueConstraintError,
@@ -88,12 +88,38 @@ function toMahjongRoom(
 function defaultTeaFeeRule(): MahjongTeaFeeRule {
   return {
     enabled: false,
-    mode: 'per_player',
+    mode: 'percentage',
     thresholdAmount: '0.00',
     ratePercent: 10,
+    feeAmount: '0.00',
     version: 0,
     updatedAt: null,
   };
+}
+
+function normalizeTeaFeeMode(value: unknown): MahjongTeaFeeMode {
+  return value === 'threshold' || value === 'shared_total' ? 'threshold' : 'percentage';
+}
+
+function calculateTransactionTeaFeeCents(
+  transaction: Pick<typeof mahjongTransactions.$inferSelect, 'amount' | 'transactionType' | 'autoFeeMode' | 'autoFeeThresholdAmount' | 'autoFeeRatePercent' | 'autoFeeAmount'>,
+): number {
+  if (transaction.transactionType !== 'manual' || !transaction.autoFeeMode || transaction.autoFeeThresholdAmount === null) return 0;
+  if ((transaction.autoFeeMode === 'percentage' || transaction.autoFeeMode === 'per_player') && transaction.autoFeeRatePercent !== null) {
+    return calculatePerPlayerTeaFeeCents(
+      toCents(transaction.amount),
+      toCents(transaction.autoFeeThresholdAmount),
+      Number(transaction.autoFeeRatePercent),
+    );
+  }
+  if ((transaction.autoFeeMode === 'threshold' || transaction.autoFeeMode === 'shared_total') && transaction.autoFeeAmount !== null) {
+    return calculateThresholdTeaFeeCents(
+      toCents(transaction.amount),
+      toCents(transaction.autoFeeThresholdAmount),
+      toCents(transaction.autoFeeAmount),
+    );
+  }
+  return 0;
 }
 
 function toMahjongTeaFeeRule(
@@ -102,9 +128,10 @@ function toMahjongTeaFeeRule(
   if (!row) return defaultTeaFeeRule();
   return {
     enabled: Boolean(row.enabled),
-    mode: row.mode === 'shared_total' ? 'shared_total' : 'per_player',
+    mode: normalizeTeaFeeMode(row.mode),
     thresholdAmount: row.thresholdAmount,
     ratePercent: Number(row.ratePercent),
+    feeAmount: row.feeAmount,
     version: Number(row.version),
     updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
   };
@@ -208,6 +235,20 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
   }
 
   // ---------- 用户相关 ----------
+
+  private async generateDefaultUserName(db: Pick<DbType, 'select'> = this.db): Promise<string> {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const suffix = String(1000 + Math.floor(Math.random() * 9000));
+      const name = `微信用户${suffix}`;
+      const existing = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.name, name))
+        .limit(1);
+      if (existing.length === 0) return name;
+    }
+    throw new ConflictException('暂时无法生成可用的默认昵称，请重试');
+  }
 
   async createUser(name: string, deviceId: string): Promise<CreateUserResponse> {
     const trimmedName = typeof name === 'string' ? name.trim() : '';
@@ -388,7 +429,8 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         const isNewUser = !user;
         if (!user) {
           const id = randomUUID();
-          await tx.insert(users).values({ id, name: '微信用户', deviceId });
+          const defaultName = await this.generateDefaultUserName(tx);
+          await tx.insert(users).values({ id, name: defaultName, deviceId });
           [user] = await tx.select().from(users).where(eq(users.id, id));
         }
         await tx.insert(userIdentities).values({
@@ -418,10 +460,25 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     if (normalizedName.length > 30) {
       throw new BadRequestException('用户名不能超过 30 个字符');
     }
-    await this.db
-      .update(users)
-      .set({ name: normalizedName })
-      .where(eq(users.id, userId));
+    const duplicate = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.name, normalizedName), sql`${users.id} <> ${userId}`))
+      .limit(1);
+    if (duplicate.length > 0) {
+      throw new ConflictException('昵称已被使用，请换一个');
+    }
+    try {
+      await this.db
+        .update(users)
+        .set({ name: normalizedName })
+        .where(eq(users.id, userId));
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException('昵称已被使用，请换一个');
+      }
+      throw error;
+    }
     const [user] = await this.db.select().from(users).where(eq(users.id, userId));
     if (!user) {
       throw new NotFoundException('用户不存在');
@@ -512,6 +569,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
   async getRoomDetail(
     roomCode: string,
     page?: DetailPage,
+    viewerUserId?: string,
   ): Promise<MahjongRoomDetailResponse> {
     const roomRows = await this.db
       .select()
@@ -524,6 +582,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     const teaFeeRule = await this.getTeaFeeRule(roomRow.id);
     const room = Object.assign(toMahjongRoom(roomRow), { teaFeeRule });
     const roomId = roomRow.id;
+    if (viewerUserId) await this.assertRoomViewer(roomId, viewerUserId, Boolean(roomRow.dissolvedAt));
 
     // 座位（按 seat_index 升序）
     const seatRows = await this.db
@@ -576,6 +635,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
             autoFeeMode: mahjongTransactions.autoFeeMode,
             autoFeeThresholdAmount: mahjongTransactions.autoFeeThresholdAmount,
             autoFeeRatePercent: mahjongTransactions.autoFeeRatePercent,
+            autoFeeAmount: mahjongTransactions.autoFeeAmount,
           })
           .from(mahjongTransactions)
           .where(eq(mahjongTransactions.roomId, roomId))
@@ -642,18 +702,9 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     }));
 
     const transactions: MahjongTransaction[] = txRows.map((tx) => {
-      const autoFeeAmountCents =
-        tx.payeeType === 'user' &&
-        tx.transactionType === 'manual' &&
-        tx.autoFeeMode === 'per_player' &&
-        tx.autoFeeThresholdAmount !== null &&
-        tx.autoFeeRatePercent !== null
-          ? calculatePerPlayerTeaFeeCents(
-              toCents(tx.amount),
-              toCents(tx.autoFeeThresholdAmount),
-              Number(tx.autoFeeRatePercent),
-            )
-          : 0;
+      const autoFeeAmountCents = tx.payeeType === 'user'
+        ? calculateTransactionTeaFeeCents(tx)
+        : 0;
       return {
         id: tx.id,
         payerId: tx.payerId,
@@ -673,89 +724,17 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       };
     });
 
-    // 计算 stats
-    // 收集所有有转账记录的用户（付款方 + 用户类型收款方），无论当前是否入座
-    const txUserIdsSet = new Set<string>();
-    for (const tx of statsTxRows) {
-      txUserIdsSet.add(tx.payerId);
-      if (tx.payeeType === 'user' && tx.payeeId) {
-        txUserIdsSet.add(tx.payeeId);
-      }
-    }
-
-    // 每个有转账记录的用户余额 = 收款总额 - 付款总额
-    const balanceMap = new Map<string, number>();
-    for (const uid of txUserIdsSet) {
-      balanceMap.set(uid, 0);
-    }
-
-    let teaFeeTotalCents = 0;
-    let totalTurnoverCents = 0;
-    const reversedOriginIds = new Set(
-      statsTxRows
-        .map((tx) => tx.reversalOf)
-        .filter((transactionId): transactionId is string => Boolean(transactionId)),
-    );
-
-    for (const tx of statsTxRows) {
-      const amountCents = toCents(tx.amount);
-      // 冲正记录只保留作审计；原记录与冲正记录都不计入有效流水。
-      if (tx.reversalOf || reversedOriginIds.has(tx.id)) continue;
-      totalTurnoverCents += Math.abs(amountCents);
-
-      if (tx.payeeType === 'tea_fee') {
-        teaFeeTotalCents += amountCents;
-        if (balanceMap.has(tx.payerId)) {
-          balanceMap.set(tx.payerId, balanceMap.get(tx.payerId)! - amountCents);
-        }
-        continue;
-      }
-
-      if (tx.payeeType === 'user' && tx.payeeId) {
-        if (balanceMap.has(tx.payeeId)) {
-          balanceMap.set(tx.payeeId, balanceMap.get(tx.payeeId)! + amountCents);
-        }
-
-        // 单人抽水：每笔带有规则快照的玩家结算转账独立计算，费用从收款人应收中扣除。
-        if (
-          tx.transactionType === 'manual' &&
-          tx.payeeId &&
-          tx.autoFeeMode === 'per_player' &&
-          tx.autoFeeThresholdAmount !== null &&
-          tx.autoFeeRatePercent !== null
-        ) {
-          const feeCents = calculatePerPlayerTeaFeeCents(
-            amountCents,
-            toCents(tx.autoFeeThresholdAmount),
-            Number(tx.autoFeeRatePercent),
-          );
-          if (feeCents > 0) {
-            balanceMap.set(tx.payeeId, (balanceMap.get(tx.payeeId) ?? 0) - feeCents);
-            teaFeeTotalCents += feeCents;
-          }
-        }
-      }
-
-      if (balanceMap.has(tx.payerId)) {
-        balanceMap.set(tx.payerId, balanceMap.get(tx.payerId)! - amountCents);
-      }
-    }
-
-    // 所有有转账记录的玩家都展示，按余额绝对值降序
-    const balances = Array.from(txUserIdsSet)
-      .map((uid) => ({
-        userId: uid,
-        userName: userNameMap.get(uid) ?? '',
-        balance: fromCents(balanceMap.get(uid) ?? 0),
+    // The cloud function and Cloud Hosting use this same domain calculation.
+    const stats = calculateRoomStats(statsTxRows);
+    const balances = Array.from(stats.balanceMap.entries())
+      .map(([userId, cents]) => ({
+        userId,
+        userName: userNameMap.get(userId) ?? '',
+        balance: centsToAmount(cents),
       }))
       .sort((a, b) => Math.abs(Number(b.balance)) - Math.abs(Number(a.balance)));
-
-    // balanceCheck: 所有用户余额之和 + 茶费 = 0 则 balanced
-    const sumBalances = balances.reduce(
-      (acc: number, b: { balance: string }) => acc + toCents(b.balance),
-      0,
-    );
-    const balanceCheck = sumBalances + teaFeeTotalCents === 0 ? 'balanced' : 'unbalanced';
+    const sumBalances = Array.from(stats.balanceMap.values()).reduce((total, cents) => total + cents, 0);
+    const balanceCheck = sumBalances + stats.teaFeeTotal === 0 ? 'balanced' : 'unbalanced';
 
     const transactionPage = page
       ? await this.getTransactionPage(roomId, page, txRows.length)
@@ -768,8 +747,8 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       ...(transactionPage ? { transactionPage } : {}),
       stats: {
         balances,
-        teaFeeTotal: fromCents(teaFeeTotalCents),
-        totalTurnover: fromCents(totalTurnoverCents),
+        teaFeeTotal: centsToAmount(stats.teaFeeTotal),
+        totalTurnover: centsToAmount(stats.totalTurnover),
         balanceCheck,
       },
     };
@@ -1012,7 +991,7 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     return toMahjongTeaFeeRule(rows[0]);
   }
 
-  /** 房主配置自动茶水费。累计总额模式先保存为预留配置，不参与计算。 */
+  /** 房主配置自动茶水费。每笔转账按保存时的规则快照结算。 */
   async updateTeaFeeRule(
     roomCode: string,
     dto: UpdateMahjongTeaFeeRuleRequest,
@@ -1023,16 +1002,22 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     if (typeof dto.enabled !== 'boolean') {
       throw new BadRequestException('自动茶水费开关无效');
     }
-    if (dto.mode !== 'per_player' && dto.mode !== 'shared_total') {
+    const inputMode = String(dto.mode || '');
+    if (!['percentage', 'threshold', 'per_player', 'shared_total'].includes(inputMode)) {
       throw new BadRequestException('茶水费模式无效');
     }
-    if (dto.enabled && dto.mode === 'shared_total') {
-      throw new BadRequestException('累计抽水模式暂未开放');
-    }
-    const threshold = parseNonNegativeAmount(dto.thresholdAmount, '起抽金额');
+    const mode = normalizeTeaFeeMode(inputMode);
+    const threshold = parseNonNegativeAmount(dto.thresholdAmount, '满额金额');
     const ratePercent = Number(dto.ratePercent);
     if (!Number.isInteger(ratePercent) || ratePercent < 0 || ratePercent > 100) {
       throw new BadRequestException('抽成比例必须是 0 到 100 的整数');
+    }
+    const feeAmount = parseNonNegativeAmount(dto.feeAmount ?? 0, '抽水金额');
+    if (dto.enabled && mode === 'threshold' && threshold <= 0) {
+      throw new BadRequestException('满额金额必须大于 0');
+    }
+    if (dto.enabled && mode === 'threshold' && feeAmount <= 0) {
+      throw new BadRequestException('抽水金额必须大于 0');
     }
     if (!dto.operatorUserId || typeof dto.operatorUserId !== 'string') {
       throw new ForbiddenException('缺少操作用户');
@@ -1061,9 +1046,10 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
     const values = {
       roomId: roomRow.id,
       enabled: dto.enabled ? 1 : 0,
-      mode: dto.mode,
-      thresholdAmount: fromCents(toCents(threshold)),
-      ratePercent,
+      mode,
+      thresholdAmount: mode === 'threshold' ? fromCents(toCents(threshold)) : '0.00',
+      ratePercent: mode === 'percentage' ? ratePercent : 0,
+      feeAmount: mode === 'threshold' ? fromCents(toCents(feeAmount)) : '0.00',
       version: nextVersion,
       updatedAt: new Date(),
     };
@@ -1167,6 +1153,33 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       );
     if (rows.length === 0) {
       throw new BadRequestException('请先加入房间');
+    }
+  }
+
+  private async assertRoomViewer(
+    roomId: string,
+    userId: string,
+    isArchived: boolean,
+  ): Promise<void> {
+    const rows = await this.db
+      .select({ id: mahjongRoomMembers.id })
+      .from(mahjongRoomMembers)
+      .where(
+        isArchived
+          ? and(
+              eq(mahjongRoomMembers.roomId, roomId),
+              eq(mahjongRoomMembers.userId, userId),
+            )
+          : and(
+              eq(mahjongRoomMembers.roomId, roomId),
+              eq(mahjongRoomMembers.userId, userId),
+              isNull(mahjongRoomMembers.leftAt),
+            ),
+      )
+      .limit(1);
+    const isMember = rows.length > 0;
+    if (!canViewRoom({ isArchived, isActiveMember: isMember, wasMember: isMember })) {
+      throw new ForbiddenException('请先加入房间');
     }
   }
 
@@ -1333,20 +1346,18 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
         operationId,
         transactionType: 'manual',
         autoFeeRuleVersion:
-          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'per_player'
-            ? teaFeeRule.version
-            : null,
+          dto.payeeType === 'user' && teaFeeRule.enabled ? teaFeeRule.version : null,
         autoFeeMode:
-          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'per_player'
-            ? teaFeeRule.mode
-            : null,
+          dto.payeeType === 'user' && teaFeeRule.enabled ? teaFeeRule.mode : null,
         autoFeeThresholdAmount:
-          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'per_player'
-            ? teaFeeRule.thresholdAmount
-            : null,
+          dto.payeeType === 'user' && teaFeeRule.enabled ? teaFeeRule.thresholdAmount : null,
         autoFeeRatePercent:
-          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'per_player'
+          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'percentage'
             ? teaFeeRule.ratePercent
+            : null,
+        autoFeeAmount:
+          dto.payeeType === 'user' && teaFeeRule.enabled && teaFeeRule.mode === 'threshold'
+            ? teaFeeRule.feeAmount
             : null,
         payerId: dto.payerId,
         payeeType: dto.payeeType,

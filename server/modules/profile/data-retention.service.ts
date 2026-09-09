@@ -15,7 +15,7 @@ import {
   pokerLedgerSnapshots,
 } from '@server/database/schema';
 import { fromCents, toCents } from '@server/common/utils';
-import { calculatePerPlayerTeaFeeCents } from '@server/modules/mahjong/tea-fee';
+import { calculatePerPlayerTeaFeeCents, calculateThresholdTeaFeeCents } from '@server/modules/mahjong/tea-fee';
 
 const DETAIL_RETENTION_MONTHS = 6;
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -251,17 +251,22 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
           if (row.payeeType !== 'user' || !row.payeeId) continue;
           this.addUserDelta(userTotals, row.payerId, -amountCents);
           this.addUserDelta(userTotals, row.payeeId, amountCents);
-          if (
-            row.transactionType === 'manual' &&
-            row.autoFeeMode === 'per_player' &&
-            row.autoFeeThresholdAmount !== null &&
-            row.autoFeeRatePercent !== null
-          ) {
-            const feeCents = calculatePerPlayerTeaFeeCents(
-              amountCents,
-              toCents(row.autoFeeThresholdAmount),
-              Number(row.autoFeeRatePercent),
-            );
+          if (row.transactionType === 'manual' && row.autoFeeThresholdAmount !== null) {
+            const feeCents = (row.autoFeeMode === 'percentage' || row.autoFeeMode === 'per_player')
+              && row.autoFeeRatePercent !== null
+              ? calculatePerPlayerTeaFeeCents(
+                amountCents,
+                toCents(row.autoFeeThresholdAmount),
+                Number(row.autoFeeRatePercent),
+              )
+              : (row.autoFeeMode === 'threshold' || row.autoFeeMode === 'shared_total')
+                && row.autoFeeAmount !== null
+                ? calculateThresholdTeaFeeCents(
+                  amountCents,
+                  toCents(row.autoFeeThresholdAmount),
+                  toCents(row.autoFeeAmount),
+                )
+                : 0;
             if (feeCents > 0) this.addUserTeaFee(userTotals, row.payeeId, feeCents);
           }
           this.addOpponentDelta(opponentTotals, row.payerId, row.payeeId, -amountCents, row.roomId);

@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
 
-const MIGRATION_VERSION = '20260906_003_audit_indexes';
+const MIGRATION_VERSION = '20260909_007_threshold_tea_fee';
 const MIGRATION_LOCK = 'gameble_score_schema_migration';
 
 function getCloudMySqlAddress() {
@@ -57,7 +57,39 @@ async function addIndex(connection, tableName, indexName, columns, unique = fals
   );
 }
 
+async function generateDefaultUserName(connection, usedNames) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const candidate = `微信用户${1000 + Math.floor(Math.random() * 9000)}`;
+    if (usedNames.has(candidate)) continue;
+    usedNames.add(candidate);
+    return candidate;
+  }
+  throw new Error('Unable to generate a unique default user name during migration.');
+}
+
+async function normalizeLegacyDefaultNames(connection) {
+  const [rows] = await connection.query("SELECT id, name FROM users WHERE name = '微信用户' ORDER BY created_at, id FOR UPDATE");
+  if (!rows.length) return;
+  const [nameRows] = await connection.query('SELECT name FROM users');
+  const usedNames = new Set(nameRows.map((row) => row.name));
+  for (const row of rows) {
+    const nextName = await generateDefaultUserName(connection, usedNames);
+    await connection.execute('UPDATE users SET name = ? WHERE id = ?', [nextName, row.id]);
+  }
+}
+
+async function assertNamesUnique(connection) {
+  const [duplicates] = await connection.query('SELECT name, COUNT(*) AS total FROM users GROUP BY name HAVING total > 1 LIMIT 1');
+  if (duplicates[0]) {
+    throw new Error(`Duplicate user nickname exists: ${duplicates[0].name}. Rename duplicates before enabling unique nicknames.`);
+  }
+}
+
 async function applyCurrentMigration(connection) {
+  await normalizeLegacyDefaultNames(connection);
+  await assertNamesUnique(connection);
+  await addColumn(connection, 'rooms', 'create_operation_id', 'VARCHAR(80) NULL AFTER `game_type`');
+  await addColumn(connection, 'mahjong_rooms', 'create_operation_id', 'VARCHAR(80) NULL AFTER `creator_user_id`');
   await addColumn(connection, 'mahjong_room_members', 'left_at', 'DATETIME(6) NULL AFTER `joined_at`');
   await addColumn(connection, 'mahjong_transactions', 'operation_id', 'VARCHAR(80) NULL AFTER `room_id`');
   await addColumn(connection, 'mahjong_transactions', 'transaction_type', "VARCHAR(40) NOT NULL DEFAULT 'manual' AFTER `operation_id`");
@@ -65,10 +97,14 @@ async function applyCurrentMigration(connection) {
   await addColumn(connection, 'mahjong_transactions', 'auto_fee_mode', 'VARCHAR(20) NULL AFTER `auto_fee_rule_version`');
   await addColumn(connection, 'mahjong_transactions', 'auto_fee_threshold_amount', 'DECIMAL(14,2) NULL AFTER `auto_fee_mode`');
   await addColumn(connection, 'mahjong_transactions', 'auto_fee_rate_percent', 'INT NULL AFTER `auto_fee_threshold_amount`');
+  await addColumn(connection, 'mahjong_transactions', 'auto_fee_amount', 'DECIMAL(14,2) NULL AFTER `auto_fee_rate_percent`');
   await addColumn(connection, 'games', 'operation_id', 'VARCHAR(80) NULL AFTER `room_id`');
 
   await addIndex(connection, 'mahjong_transactions', 'mahjong_transactions_operation_id_key', ['operation_id'], true);
   await addIndex(connection, 'games', 'games_operation_id_key', ['operation_id'], true);
+  await addIndex(connection, 'rooms', 'rooms_create_operation_id_key', ['create_operation_id'], true);
+  await addIndex(connection, 'mahjong_rooms', 'mahjong_rooms_create_operation_id_key', ['create_operation_id'], true);
+  await addIndex(connection, 'users', 'users_name_key', ['name'], true);
   await addIndex(connection, 'games', 'idx_games_created_at_id', ['created_at', 'id']);
   await addIndex(connection, 'mahjong_room_members', 'idx_mahjong_room_members_user_joined', ['user_id', 'joined_at']);
   await addIndex(connection, 'mahjong_room_members', 'idx_mahjong_room_members_user_active', ['user_id', 'left_at', 'joined_at']);
@@ -83,13 +119,24 @@ async function applyCurrentMigration(connection) {
     CREATE TABLE IF NOT EXISTS mahjong_tea_fee_rules (
       room_id CHAR(36) PRIMARY KEY,
       enabled TINYINT NOT NULL DEFAULT 0,
-      mode VARCHAR(20) NOT NULL DEFAULT 'per_player',
+      mode VARCHAR(20) NOT NULL DEFAULT 'percentage',
       threshold_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
       rate_percent INT NOT NULL DEFAULT 10,
+      fee_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
       version INT NOT NULL DEFAULT 1,
       updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
       CONSTRAINT mahjong_tea_fee_rules_room_fkey FOREIGN KEY (room_id) REFERENCES mahjong_rooms(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await addColumn(connection, 'mahjong_tea_fee_rules', 'fee_amount', 'DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `rate_percent`');
+  await connection.query(`
+    UPDATE mahjong_tea_fee_rules
+       SET mode = CASE mode
+         WHEN 'per_player' THEN 'percentage'
+         WHEN 'shared_total' THEN 'threshold'
+         ELSE mode
+       END
+     WHERE mode IN ('per_player', 'shared_total')
   `);
   await connection.query(`
     CREATE TABLE IF NOT EXISTS mahjong_opponent_snapshot_rooms (
@@ -109,10 +156,18 @@ async function applyCurrentMigration(connection) {
     CREATE TABLE IF NOT EXISTS mahjong_room_revisions (
       room_code VARCHAR(50) PRIMARY KEY,
       version INT NOT NULL DEFAULT 0,
+      stats_version INT NOT NULL DEFAULT -1,
+      stats_total_turnover DECIMAL(14,2) NOT NULL DEFAULT 0,
+      stats_tea_fee_total DECIMAL(14,2) NOT NULL DEFAULT 0,
+      stats_balances_json LONGTEXT NULL,
       updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
       INDEX idx_mahjong_room_revisions_updated (updated_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  await addColumn(connection, 'mahjong_room_revisions', 'stats_version', 'INT NOT NULL DEFAULT -1 AFTER `version`');
+  await addColumn(connection, 'mahjong_room_revisions', 'stats_total_turnover', 'DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `stats_version`');
+  await addColumn(connection, 'mahjong_room_revisions', 'stats_tea_fee_total', 'DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `stats_total_turnover`');
+  await addColumn(connection, 'mahjong_room_revisions', 'stats_balances_json', 'LONGTEXT NULL AFTER `stats_tea_fee_total`');
 }
 
 async function main() {

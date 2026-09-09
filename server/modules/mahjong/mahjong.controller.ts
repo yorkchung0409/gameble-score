@@ -151,10 +151,13 @@ export class MahjongController {
     @Param('roomCode') roomCode: string,
     @Query('transactionLimit') transactionLimit?: string,
     @Query('transactionOffset') transactionOffset?: string,
+    @Headers('x-wx-openid') cloudOpenId?: string,
   ): Promise<MahjongRoomDetailResponse> {
+    const viewerUserId = await this.resolveCloudUserId(cloudOpenId);
     return this.mahjongService.getRoomDetail(
       roomCode,
       parseTransactionPage(transactionLimit, transactionOffset),
+      viewerUserId,
     );
   }
 

@@ -3,8 +3,10 @@ CREATE TABLE IF NOT EXISTS rooms (
   room_code VARCHAR(50) NOT NULL UNIQUE,
   room_name VARCHAR(200) NOT NULL DEFAULT '牌局记账',
   game_type VARCHAR(20) NOT NULL DEFAULT 'texas',
+  create_operation_id VARCHAR(80) NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY rooms_create_operation_id_key (create_operation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS players (
@@ -47,7 +49,8 @@ CREATE TABLE IF NOT EXISTS users (
   id CHAR(36) PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   device_id VARCHAR(100) NOT NULL UNIQUE,
-  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  UNIQUE KEY users_name_key (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS user_identities (
@@ -78,17 +81,20 @@ CREATE TABLE IF NOT EXISTS mahjong_rooms (
   name VARCHAR(200) NOT NULL DEFAULT '麻将房间',
   mode VARCHAR(20) NOT NULL DEFAULT 'seated',
   creator_user_id CHAR(36) NULL,
+  create_operation_id VARCHAR(80) NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   dissolved_at DATETIME(6) NULL,
+  UNIQUE KEY mahjong_rooms_create_operation_id_key (create_operation_id),
   INDEX idx_mahjong_rooms_dissolved_created (dissolved_at, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS mahjong_tea_fee_rules (
   room_id CHAR(36) PRIMARY KEY,
   enabled TINYINT NOT NULL DEFAULT 0,
-    mode VARCHAR(20) NOT NULL DEFAULT 'per_player',
+  mode VARCHAR(20) NOT NULL DEFAULT 'percentage',
   threshold_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
   rate_percent INT NOT NULL DEFAULT 10,
+  fee_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
   version INT NOT NULL DEFAULT 1,
   updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   CONSTRAINT mahjong_tea_fee_rules_room_fkey FOREIGN KEY (room_id) REFERENCES mahjong_rooms(id) ON DELETE CASCADE
@@ -97,6 +103,10 @@ CREATE TABLE IF NOT EXISTS mahjong_tea_fee_rules (
 CREATE TABLE IF NOT EXISTS mahjong_room_revisions (
   room_code VARCHAR(50) PRIMARY KEY,
   version INT NOT NULL DEFAULT 0,
+  stats_version INT NOT NULL DEFAULT -1,
+  stats_total_turnover DECIMAL(14,2) NOT NULL DEFAULT 0,
+  stats_tea_fee_total DECIMAL(14,2) NOT NULL DEFAULT 0,
+  stats_balances_json LONGTEXT NULL,
   updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   INDEX idx_mahjong_room_revisions_updated (updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -190,6 +200,7 @@ CREATE TABLE IF NOT EXISTS mahjong_transactions (
   auto_fee_mode VARCHAR(20) NULL,
   auto_fee_threshold_amount DECIMAL(14,2) NULL,
   auto_fee_rate_percent INT NULL,
+  auto_fee_amount DECIMAL(14,2) NULL,
   payer_id CHAR(36) NOT NULL,
   payee_type VARCHAR(20) NOT NULL,
   payee_id CHAR(36) NULL,
