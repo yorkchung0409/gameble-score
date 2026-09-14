@@ -174,21 +174,10 @@ export interface MiniOperationsOverviewResponse {
   users: {
     total: number;
     newIn24Hours: number;
-    activeIn5Minutes: number;
   };
   rooms: {
     activeMahjongIn30Minutes: number;
     activePokerIn30Minutes: number;
-  };
-  transactions: {
-    inLastHour: number;
-    inLast24Hours: number;
-    reversalsInLast24Hours: number;
-  };
-  realtime: {
-    localConnections: number;
-    localRooms: number;
-    localLongPollWaiters: number;
   };
 }
 
@@ -217,6 +206,7 @@ export interface MahjongUser {
   id: string;
   name: string;
   createdAt: string;
+  nicknameChangedAt?: string | null;
 }
 
 export interface CreateUserRequest {

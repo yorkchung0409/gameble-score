@@ -6,6 +6,8 @@ const test = require('node:test');
 const functionRoot = path.resolve(__dirname, '..', 'cloud-functions', 'gameble-bootstrap-probe');
 const sharedRulesPath = path.resolve(__dirname, '..', 'shared', 'mahjong-rules.js');
 const core = require(path.join(functionRoot, 'mahjong-core.js'));
+const profileCore = require(path.join(functionRoot, 'profile-core.js'));
+const retentionCore = require(path.join(functionRoot, 'retention-core.js'));
 
 test('cloud function core trusts OpenID and keeps all Mahjong writes behind its action dispatcher', () => {
   const source = fs.readFileSync(path.join(functionRoot, 'index.js'), 'utf8');
@@ -23,7 +25,7 @@ test('cloud function core trusts OpenID and keeps all Mahjong writes behind its 
   assert.match(core, /FROM poker_ledger_owners/);
   assert.match(core, /INSERT INTO mahjong_transactions/);
   assert.match(core, /updateMahjongUserProfile/);
-  assert.match(core, /UPDATE users SET name = \? WHERE id = \?/);
+  assert.match(core, /UPDATE users SET name = \?, nickname_changed_at = CURRENT_TIMESTAMP\(6\)\s+WHERE id = \? AND nickname_changed_at IS NULL/);
   assert.match(core, /assertRoomViewer\(connection, room, user\.id\)/);
   assert.match(core, /WHERE room_id = \? AND user_id = \? LIMIT 1/);
   assert.match(core, /require\('\.\/mahjong-rules'\)/);
@@ -100,13 +102,69 @@ test('an unchanged room revision reads only the cached aggregate', async () => {
 
 test('Mini Program deployment copy stays identical to the cloud function source', () => {
   const miniFunctionRoot = path.resolve(__dirname, '..', '..', 'gameble-score-miniprogram', 'cloudfunctions', 'gameble-bootstrap-probe');
-  for (const filename of ['index.js', 'mahjong-core.js', 'mahjong-rules.js', 'poker-core.js', 'profile-core.js', 'package.json']) {
+  for (const filename of ['index.js', 'mahjong-core.js', 'mahjong-rules.js', 'poker-core.js', 'profile-core.js', 'retention-core.js', 'package.json', 'config.json']) {
     assert.equal(
       fs.readFileSync(path.join(miniFunctionRoot, filename), 'utf8'),
       fs.readFileSync(path.join(functionRoot, filename), 'utf8'),
       `${filename} must be synchronized before upload`,
     );
   }
+});
+
+test('retention cleanup is deployed with a daily timer trigger', () => {
+  const config = JSON.parse(fs.readFileSync(path.join(functionRoot, 'config.json'), 'utf8'));
+  const retention = fs.readFileSync(path.join(functionRoot, 'retention-core.js'), 'utf8');
+  assert.equal(config.triggers?.some((trigger) => trigger.name === 'dailyRetentionCleanup' && trigger.type === 'timer'), true);
+  assert.equal(typeof require(path.join(functionRoot, 'retention-core.js')).runRetentionCleanup, 'function');
+  assert.match(retention, /withTransaction/);
+  assert.match(retention, /latestCreatedAt/);
+  assert.match(retention, /GREATEST\(archived_through, VALUES\(archived_through\)\)/);
+  assert.match(retention, /LIMIT \? FOR UPDATE/);
+});
+
+test('retention skips old origins with a recent reversal without blocking later eligible rows', async () => {
+  const statements = [];
+  const connection = {
+    async execute(statement, values) {
+      statements.push({ statement, values });
+      return [[]];
+    },
+  };
+  const cutoff = '2026-03-14 00:00:00.000000';
+  assert.equal(await retentionCore.cleanupMahjong(connection, cutoff, 25), 0);
+  assert.equal(statements.length, 1);
+  assert.match(statements[0].statement, /t\.reversal_of IS NULL/);
+  assert.match(statements[0].statement, /NOT EXISTS/);
+  assert.match(statements[0].statement, /reversal\.created_at >= \?/);
+  assert.deepEqual(statements[0].values, [cutoff, cutoff, 25]);
+});
+
+test('summary always includes live rows even when a snapshot has a newer archive marker', async () => {
+  const connection = {
+    async execute(statement) {
+      if (statement.includes('FROM users WHERE id = ?')) {
+        return [[{ id: 'self', name: '玩家', createdAt: '2025-01-01 00:00:00.000000', nicknameChangedAt: null }]];
+      }
+      if (statement.includes('FROM poker_ledger_owners')) return [[]];
+      if (statement.includes('FROM mahjong_transactions WHERE payer_id = ? OR payee_id = ?')) {
+        return [[{
+          id: 'live-old-row', roomId: 'room-1', payerId: 'self', payeeType: 'user', payeeId: 'other',
+          amount: '5.00', reversalOf: null, transactionType: 'manual', autoFeeMode: null,
+          autoFeeThresholdAmount: null, autoFeeRatePercent: null, autoFeeAmount: null,
+          createdAt: '2025-01-02 00:00:00.000000',
+        }]];
+      }
+      if (statement.includes('FROM mahjong_user_snapshots')) {
+        return [[{ netProfit: '10.00', winTotal: '10.00', lossTotal: '0.00', teaFeeTotal: '0.00' }]];
+      }
+      if (statement.includes('FROM mahjong_room_members')) return [[]];
+      if (statement.includes('FROM mahjong_opponent_snapshots')) return [[]];
+      throw new Error(`Unexpected query: ${statement}`);
+    },
+  };
+  const summary = await profileCore.getSummary(connection, 'self');
+  assert.equal(summary.mahjong.netProfit, '5.00');
+  assert.equal(summary.mahjong.lossTotal, '5.00');
 });
 
 test('the cloud function deploys the canonical Mahjong rules without a local fork', () => {

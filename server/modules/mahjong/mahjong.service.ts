@@ -60,6 +60,7 @@ function toMahjongUser(row: typeof users.$inferSelect): MahjongUser {
     id: row.id,
     name: row.name,
     createdAt: row.createdAt.toISOString(),
+    nicknameChangedAt: row.nicknameChangedAt ? row.nicknameChangedAt.toISOString() : null,
   };
 }
 
@@ -469,10 +470,14 @@ export class MahjongService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('昵称已被使用，请换一个');
     }
     try {
-      await this.db
+      const updated = await this.db
         .update(users)
-        .set({ name: normalizedName })
-        .where(eq(users.id, userId));
+        .set({ name: normalizedName, nicknameChangedAt: new Date() })
+        .where(and(eq(users.id, userId), isNull(users.nicknameChangedAt)));
+      const affectedRows = Number((updated as unknown as [{ affectedRows?: number }])[0]?.affectedRows || 0);
+      if (affectedRows === 0) {
+        throw new ConflictException('昵称只能修改一次');
+      }
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         throw new ConflictException('昵称已被使用，请换一个');

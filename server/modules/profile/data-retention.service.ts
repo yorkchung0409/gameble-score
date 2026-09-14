@@ -37,6 +37,10 @@ type OpponentAggregate = UserAggregate & {
   roomIds: Set<string>;
 };
 
+function latestCreatedAt(rows: Array<{ createdAt: Date }>, fallback: Date): Date {
+  return rows.reduce((latest, row) => row.createdAt > latest ? row.createdAt : latest, fallback);
+}
+
 @Injectable()
 export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DataRetentionService.name);
@@ -96,10 +100,11 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
     for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
       const count = await this.db.transaction(async (tx) => {
         const oldGames = await tx
-          .select({ id: games.id, roomId: games.roomId })
+          .select({ id: games.id, roomId: games.roomId, createdAt: games.createdAt })
           .from(games)
           .innerJoin(pokerLedgerOwners, eq(pokerLedgerOwners.roomId, games.roomId))
           .where(lt(games.createdAt, cutoff))
+          .orderBy(asc(games.createdAt), asc(games.id))
           .limit(BATCH_SIZE);
         if (oldGames.length === 0) return 0;
 
@@ -126,6 +131,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
           totals.set(roomId, total);
         }
 
+        const archivedThrough = latestCreatedAt(oldGames, new Date(0));
         for (const [roomId, total] of totals) {
           const existing = await tx
             .select({ netProfit: pokerLedgerSnapshots.netProfit, gameCount: pokerLedgerSnapshots.gameCount })
@@ -137,7 +143,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
               .set({
                 netProfit: fromCents(toCents(existing[0].netProfit) + total.netCents),
                 gameCount: Number(existing[0].gameCount || 0) + total.gameCount,
-                archivedThrough: cutoff,
+                archivedThrough,
               })
               .where(eq(pokerLedgerSnapshots.roomId, roomId));
           } else {
@@ -146,7 +152,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
               userId: total.userId,
               netProfit: fromCents(total.netCents),
               gameCount: total.gameCount,
-              archivedThrough: cutoff,
+              archivedThrough,
             });
           }
         }
@@ -231,6 +237,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
         const safeRows = Array.from(safeIds)
           .map((id) => byId.get(id))
           .filter((row): row is (typeof allRows)[number] => Boolean(row));
+        const archivedThrough = latestCreatedAt(safeRows, new Date(0));
         const reversedOriginIds = new Set(
           safeRows
             .map((row) => row.reversalOf)
@@ -286,7 +293,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
                 winTotal: fromCents(toCents(existing[0].winTotal) + total.winCents),
                 lossTotal: fromCents(toCents(existing[0].lossTotal) + total.lossCents),
                 teaFeeTotal: fromCents(toCents(existing[0].teaFeeTotal) + total.teaFeeCents),
-                archivedThrough: cutoff,
+                archivedThrough,
               })
               .where(eq(mahjongUserSnapshots.userId, userId));
           } else {
@@ -296,7 +303,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
               winTotal: fromCents(total.winCents),
               lossTotal: fromCents(total.lossCents),
               teaFeeTotal: fromCents(total.teaFeeCents),
-              archivedThrough: cutoff,
+              archivedThrough,
             });
           }
         }
@@ -339,7 +346,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
                 lossTotal: fromCents(toCents(existing[0].lossTotal) + total.lossCents),
                 transactionCount: Number(existing[0].transactionCount || 0) + total.transactionCount,
                 roomCount: Number(existing[0].roomCount || 0) + newRoomIds.length,
-                archivedThrough: cutoff,
+                archivedThrough,
               })
               .where(eq(mahjongOpponentSnapshots.id, id));
           } else {
@@ -352,7 +359,7 @@ export class DataRetentionService implements OnModuleInit, OnModuleDestroy {
               lossTotal: fromCents(total.lossCents),
               transactionCount: total.transactionCount,
               roomCount: newRoomIds.length,
-              archivedThrough: cutoff,
+              archivedThrough,
             });
           }
         }

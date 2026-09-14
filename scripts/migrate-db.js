@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
 
-const MIGRATION_VERSION = '20260909_007_threshold_tea_fee';
+const MIGRATION_VERSION = '20260914_008_nickname_retention';
 const MIGRATION_LOCK = 'gameble_score_schema_migration';
 
 function getCloudMySqlAddress() {
@@ -99,6 +99,8 @@ async function applyCurrentMigration(connection) {
   await addColumn(connection, 'mahjong_transactions', 'auto_fee_rate_percent', 'INT NULL AFTER `auto_fee_threshold_amount`');
   await addColumn(connection, 'mahjong_transactions', 'auto_fee_amount', 'DECIMAL(14,2) NULL AFTER `auto_fee_rate_percent`');
   await addColumn(connection, 'games', 'operation_id', 'VARCHAR(80) NULL AFTER `room_id`');
+  await addColumn(connection, 'users', 'nickname_changed_at', 'DATETIME(6) NULL AFTER `device_id`');
+  await connection.query("UPDATE users SET nickname_changed_at = created_at WHERE nickname_changed_at IS NULL AND name NOT REGEXP '^微信用户[0-9]{4}$'");
 
   await addIndex(connection, 'mahjong_transactions', 'mahjong_transactions_operation_id_key', ['operation_id'], true);
   await addIndex(connection, 'games', 'games_operation_id_key', ['operation_id'], true);

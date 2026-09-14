@@ -94,6 +94,7 @@ export const users = mysqlTable(
     id: id(),
     name: varchar('name', { length: 100 }).notNull(),
     deviceId: varchar('device_id', { length: 100 }).notNull().unique(),
+    nicknameChangedAt: cloudDateTime('nickname_changed_at', { fsp: 6 }),
     createdAt: cloudDateTime('created_at', { fsp: 6 }).notNull().default(sql`CURRENT_TIMESTAMP(6)`),
   },
   (table) => [
